@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh-Hans</string>
+    <key>CFBundleDisplayName</key>
+    <string>ShotLens</string>
+    <key>CFBundleExecutable</key>
+    <string>ShotLens</string>
+    <key>CFBundleIconFile</key>
+    <string>ShotLens.icns</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.qingcheng.shotlens</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>ShotLens</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>瞬译需要截取屏幕内容以进行文字识别和翻译。截图用于本机 OCR，识别后的文本会发送到你配置的 API 进行翻译。</string>
+</dict>
+</plist>
