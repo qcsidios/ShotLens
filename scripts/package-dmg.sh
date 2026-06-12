@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="ShotLens"
-APP_VERSION="0.1.0"
+APP_VERSION="1.0"
 BUILD_DIR="$ROOT_DIR/build/release"
 STAGING_DIR="$BUILD_DIR/dmg-staging"
 DMG_PATH="$BUILD_DIR/ShotLens-$APP_VERSION.dmg"

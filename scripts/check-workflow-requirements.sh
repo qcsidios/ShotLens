@@ -28,7 +28,7 @@ if rg -n 'SelectionOverlay|CGRect\+Vision|E640D5BF74FBB8C9742B08E9|97EEAF52C4C8E
   exit 1
 fi
 
-rg -n 'APP_VERSION="0\.1\.0"' "$BUILD_SCRIPT" >/dev/null
+rg -n 'APP_VERSION="1\.0"' "$BUILD_SCRIPT" >/dev/null
 rg -n 'APP_BUILD="1"' "$BUILD_SCRIPT" >/dev/null
 rg -n 'MIN_MACOS_VERSION="14\.0"' "$BUILD_SCRIPT" >/dev/null
 rg -n '<string>\$APP_VERSION</string>' "$BUILD_SCRIPT" >/dev/null

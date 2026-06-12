@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="ShotLens"
-APP_VERSION="0.1.0"
+APP_VERSION="1.0"
 APP_BUILD="1"
 MIN_MACOS_VERSION="14.0"
 BUILD_DIR="$ROOT_DIR/build/local"

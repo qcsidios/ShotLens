@@ -38,7 +38,7 @@ bash scripts/build-local.sh
 bash scripts/package-dmg.sh
 ```
 
-DMG 会输出到 `build/release/ShotLens-0.1.0.dmg`。
+DMG 会输出到 `build/release/ShotLens-1.0.dmg`。
 
 ### 验证
 
@@ -56,23 +56,23 @@ bash scripts/check-preferences-edit-save.sh
 
 ```bash
 bash scripts/package-dmg.sh
-git tag v0.1.0
-git push origin v0.1.0
-gh release create v0.1.0 build/release/ShotLens-0.1.0.dmg \
-  --title "ShotLens 0.1.0" \
+git tag v1.0
+git push origin v1.0
+gh release create v1.0 build/release/ShotLens-1.0.dmg \
+  --title "ShotLens 1.0" \
   --notes "Initial public release."
 ```
 
 如果想先创建草稿发行版，加上 `--draft`：
 
 ```bash
-gh release create v0.1.0 build/release/ShotLens-0.1.0.dmg \
-  --title "ShotLens 0.1.0" \
+gh release create v1.0 build/release/ShotLens-1.0.dmg \
+  --title "ShotLens 1.0" \
   --notes "Initial public release." \
   --draft
 ```
 
-网页方式：打开 GitHub 仓库页面，进入 `Releases`，点击 `Draft a new release`，创建或选择 `v0.1.0` 标签，填写标题和说明，上传 `build/release/ShotLens-0.1.0.dmg`，最后发布。
+网页方式：打开 GitHub 仓库页面，进入 `Releases`，点击 `Draft a new release`，创建或选择 `v1.0` 标签，填写标题和说明，上传 `build/release/ShotLens-1.0.dmg`，最后发布。
 
 ### 说明
 
@@ -124,7 +124,7 @@ To package a DMG:
 bash scripts/package-dmg.sh
 ```
 
-The DMG is written to `build/release/ShotLens-0.1.0.dmg`.
+The DMG is written to `build/release/ShotLens-1.0.dmg`.
 
 ### Verification
 
@@ -142,23 +142,23 @@ With the GitHub CLI:
 
 ```bash
 bash scripts/package-dmg.sh
-git tag v0.1.0
-git push origin v0.1.0
-gh release create v0.1.0 build/release/ShotLens-0.1.0.dmg \
-  --title "ShotLens 0.1.0" \
+git tag v1.0
+git push origin v1.0
+gh release create v1.0 build/release/ShotLens-1.0.dmg \
+  --title "ShotLens 1.0" \
   --notes "Initial public release."
 ```
 
 Add `--draft` if you want to create a draft release first:
 
 ```bash
-gh release create v0.1.0 build/release/ShotLens-0.1.0.dmg \
-  --title "ShotLens 0.1.0" \
+gh release create v1.0 build/release/ShotLens-1.0.dmg \
+  --title "ShotLens 1.0" \
   --notes "Initial public release." \
   --draft
 ```
 
-From the GitHub website: open the repository, go to `Releases`, click `Draft a new release`, create or select the `v0.1.0` tag, fill in the title and notes, upload `build/release/ShotLens-0.1.0.dmg`, then publish it.
+From the GitHub website: open the repository, go to `Releases`, click `Draft a new release`, create or select the `v1.0` tag, fill in the title and notes, upload `build/release/ShotLens-1.0.dmg`, then publish it.
 
 ### Notes
 
