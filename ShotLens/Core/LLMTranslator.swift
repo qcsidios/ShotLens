@@ -19,8 +19,7 @@ struct LLMTranslator: TranslationProvider {
         request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 45
 
-        let payload: [String: Any] = [
-            "model": settings.model,
+        var payload: [String: Any] = [
             "temperature": 0,
             "messages": [
                 [
@@ -33,6 +32,9 @@ struct LLMTranslator: TranslationProvider {
                 ]
             ]
         ]
+        if !settings.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["model"] = settings.model
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
         let (data, response) = try await URLSession.shared.data(for: request)

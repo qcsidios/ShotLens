@@ -13,7 +13,6 @@ struct TranslationSettings {
     var isLLMConfigured: Bool {
         !apiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var apiAvailabilityText: String {
