@@ -248,6 +248,10 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         clearButton.bezelStyle = .rounded
         clearButton.widthAnchor.constraint(equalToConstant: 58).isActive = true
         headerRow.addArrangedSubview(clearButton)
+        let testButton = NSButton(title: "测试", target: self, action: #selector(testConnectionClicked))
+        testButton.bezelStyle = .rounded
+        testButton.widthAnchor.constraint(equalToConstant: 58).isActive = true
+        headerRow.addArrangedSubview(testButton)
         let status = label("", font: .systemFont(ofSize: 12, weight: .semibold), color: .secondaryLabelColor)
         apiStatusLabel = status
         headerRow.addArrangedSubview(status)
@@ -567,6 +571,11 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         }
     }
 
+    @objc private func testConnectionClicked() {
+        connectionTestTask?.cancel()
+        testConnection()
+    }
+
     @objc private func clearAPISettingsClicked() {
         pendingSave?.cancel()
         TranslationSettings.resetSavedConfiguration()
@@ -648,16 +657,27 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     // MARK: - 模型列表
 
     @objc private func modelArrowClicked() {
+        setArrowExpanded(true)
         if availableModels.isEmpty {
             fetchModels()
         } else {
             showModelPicker()
+            setArrowExpanded(false)
         }
+    }
+
+    private func setArrowExpanded(_ expanded: Bool) {
+        let symbolName = expanded ? "chevron.up" : "chevron.down"
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .regular)
+        modelArrowButton.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(config)
     }
 
     private func fetchModels() {
         let settings = currentDraftSettings()
-        guard settings.isLLMConfigured else { return }
+        guard settings.isLLMConfigured else {
+            setArrowExpanded(false)
+            return
+        }
 
         modelArrowButton.isEnabled = false
 
@@ -666,6 +686,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: "\(endpoint)/models") else {
             modelArrowButton.isEnabled = true
+            setArrowExpanded(false)
             return
         }
 
@@ -683,10 +704,12 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
                     self.availableModels = response.data.map { $0.id }.sorted()
                     self.modelArrowButton.isEnabled = true
                     self.showModelPicker()
+                    self.setArrowExpanded(false)
                 }
             } catch {
                 await MainActor.run {
                     self.modelArrowButton.isEnabled = true
+                    self.setArrowExpanded(false)
                 }
             }
         }
