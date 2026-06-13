@@ -593,9 +593,13 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     // MARK: - 连接测试
 
+    private var canTestConnection: Bool {
+        !apiEndpointField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !apiKeyValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private func scheduleConnectionTest() {
-        let settings = currentDraftSettings()
-        guard settings.isLLMConfigured else {
+        guard canTestConnection else {
             connectionState = .notConfigured
             refreshStatus()
             return
@@ -612,13 +616,13 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     private func testConnection() {
-        let settings = currentDraftSettings()
-        guard settings.isLLMConfigured else {
+        guard canTestConnection else {
             connectionState = .unavailable
             refreshStatus()
             return
         }
 
+        let settings = currentDraftSettings()
         let endpoint = settings.apiEndpoint
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -657,8 +661,8 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     // MARK: - 模型列表
 
     @objc private func modelArrowClicked() {
-        // 未配置时给一个短暂翻转反馈，让用户感知点击已触发
-        guard currentDraftSettings().isLLMConfigured else {
+        // 地址或 Key 为空时给短暂翻转反馈
+        guard canTestConnection else {
             setArrowExpanded(true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
                 self?.setArrowExpanded(false)
@@ -682,9 +686,9 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     private func fetchModels() {
-        let settings = currentDraftSettings()
-        guard settings.isLLMConfigured else { return }
+        guard canTestConnection else { return }
 
+        let settings = currentDraftSettings()
         modelArrowButton.isEnabled = false
 
         let endpoint = settings.apiEndpoint
