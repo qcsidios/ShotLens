@@ -573,6 +573,9 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     @objc private func testConnectionClicked() {
         connectionTestTask?.cancel()
+        // 先无条件显示"测试中…"，让用户感知按钮已被触发
+        connectionState = .testing
+        refreshStatus()
         testConnection()
     }
 
@@ -611,13 +614,10 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private func testConnection() {
         let settings = currentDraftSettings()
         guard settings.isLLMConfigured else {
-            connectionState = .notConfigured
+            connectionState = .unavailable
             refreshStatus()
             return
         }
-
-        connectionState = .testing
-        refreshStatus()
 
         let endpoint = settings.apiEndpoint
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -657,6 +657,15 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     // MARK: - 模型列表
 
     @objc private func modelArrowClicked() {
+        // 未配置时给一个短暂翻转反馈，让用户感知点击已触发
+        guard currentDraftSettings().isLLMConfigured else {
+            setArrowExpanded(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                self?.setArrowExpanded(false)
+            }
+            return
+        }
+
         setArrowExpanded(true)
         if availableModels.isEmpty {
             fetchModels()
@@ -674,10 +683,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     private func fetchModels() {
         let settings = currentDraftSettings()
-        guard settings.isLLMConfigured else {
-            setArrowExpanded(false)
-            return
-        }
+        guard settings.isLLMConfigured else { return }
 
         modelArrowButton.isEnabled = false
 
