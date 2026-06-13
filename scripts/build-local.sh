@@ -3,7 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="ShotLens"
-APP_VERSION="1.0"
+APP_VERSION="v1.0"
+BUNDLE_SHORT_VERSION="${APP_VERSION#v}"
 APP_BUILD="1"
 MIN_MACOS_VERSION="14.0"
 BUILD_DIR="$ROOT_DIR/build/local"
@@ -14,7 +15,7 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 EXECUTABLE="$MACOS_DIR/$APP_NAME"
 OCR_EXECUTABLE="$MACOS_DIR/ShotLensOCR"
 SELECT_EXECUTABLE="$MACOS_DIR/ShotLensSelect"
-DEPLOY_DIR="${SHOTLENS_DEPLOY_DIR:-$HOME/Downloads}"
+DEPLOY_DIR="${SHOTLENS_DEPLOY_DIR:-$BUILD_DIR}"
 DEPLOY_APP_DIR="$DEPLOY_DIR/$APP_NAME.app"
 CODESIGN_IDENTITY="${SHOTLENS_CODESIGN_IDENTITY:-}"
 
@@ -70,7 +71,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>$APP_VERSION</string>
+    <string>$BUNDLE_SHORT_VERSION</string>
     <key>CFBundleVersion</key>
     <string>$APP_BUILD</string>
     <key>LSMinimumSystemVersion</key>
@@ -91,13 +92,15 @@ else
 fi
 
 mkdir -p "$DEPLOY_DIR"
-rm -rf "$DEPLOY_APP_DIR"
-ditto "$APP_DIR" "$DEPLOY_APP_DIR"
-xattr -dr com.apple.quarantine "$DEPLOY_APP_DIR" 2>/dev/null || true
-if [[ -n "$CODESIGN_IDENTITY" ]]; then
-  codesign --force --deep --sign "$CODESIGN_IDENTITY" "$DEPLOY_APP_DIR" >/dev/null
-else
-  codesign --force --deep --sign - "$DEPLOY_APP_DIR" >/dev/null
+if [[ "$DEPLOY_APP_DIR" != "$APP_DIR" ]]; then
+  rm -rf "$DEPLOY_APP_DIR"
+  ditto "$APP_DIR" "$DEPLOY_APP_DIR"
+  xattr -dr com.apple.quarantine "$DEPLOY_APP_DIR" 2>/dev/null || true
+  if [[ -n "$CODESIGN_IDENTITY" ]]; then
+    codesign --force --deep --sign "$CODESIGN_IDENTITY" "$DEPLOY_APP_DIR" >/dev/null
+  else
+    codesign --force --deep --sign - "$DEPLOY_APP_DIR" >/dev/null
+  fi
 fi
 
 echo "$DEPLOY_APP_DIR"

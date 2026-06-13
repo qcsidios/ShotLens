@@ -7,25 +7,43 @@
 
 /* Begin PBXBuildFile section */
 		B8116981EAFA01D4CE4DD131 /* ShotLensApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CC6C18ACBA6695EE116D9CA /* ShotLensApp.swift */; };
+		AA1000000000000000000001 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000001 /* MainWindow.swift */; };
 		14FDEAE64D465E0F08C18F47 /* ScreenshotCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80403C353A9F4520D6B9781B /* ScreenshotCapture.swift */; };
 		3A9FAEEC0162DA5D499E526D /* OCREngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B0EA5F995E50D64F86B572 /* OCREngine.swift */; };
 		5E8CE4ABA0F7DEC953079B77 /* TranslationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70274E80564831602C46BC1 /* TranslationProvider.swift */; };
 		BD964147A26324B530AFF011 /* OverlayWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FBF622045FA1CCE5071C395 /* OverlayWindow.swift */; };
 		2F97AF1B16D3F0F613C1C2CF /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F13450B6D333B20F2D8454CE /* ClipboardManager.swift */; };
+		AA1000000000000000000002 /* LLMTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000002 /* LLMTranslator.swift */; };
+		AA1000000000000000000003 /* SelectionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000003 /* SelectionClient.swift */; };
+		AA1000000000000000000004 /* ShotLensLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000004 /* ShotLensLanguage.swift */; };
+		AA1000000000000000000005 /* ShotLensLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000005 /* ShotLensLogger.swift */; };
+		AA1000000000000000000006 /* TextLayoutOptimizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000006 /* TextLayoutOptimizer.swift */; };
+		AA1000000000000000000007 /* TranslationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000007 /* TranslationSettings.swift */; };
 		F279A23EB340264A391C9A83 /* TranslationResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F8018948F1F56D58139355C /* TranslationResult.swift */; };
 		2A87E29B1CCF1E2196F278C6 /* ShortcutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B498451C1DB5664DC17DC2 /* ShortcutRecorder.swift */; };
+		AA1000000000000000000008 /* ShotLens.icns in Resources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000008 /* ShotLens.icns */; };
+		AA1000000000000000000009 /* ShotLensMenuBarTemplate.png in Resources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000009 /* ShotLensMenuBarTemplate.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		1CC6C18ACBA6695EE116D9CA /* ShotLensApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotLensApp.swift; sourceTree = "<group>"; };
+		AA2000000000000000000001 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
 		277C497D337A8828C1CFFCC1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		80403C353A9F4520D6B9781B /* ScreenshotCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotCapture.swift; sourceTree = "<group>"; };
 		56B0EA5F995E50D64F86B572 /* OCREngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCREngine.swift; sourceTree = "<group>"; };
 		F70274E80564831602C46BC1 /* TranslationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationProvider.swift; sourceTree = "<group>"; };
 		3FBF622045FA1CCE5071C395 /* OverlayWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindow.swift; sourceTree = "<group>"; };
 		F13450B6D333B20F2D8454CE /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardManager.swift; sourceTree = "<group>"; };
+		AA2000000000000000000002 /* LLMTranslator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMTranslator.swift; sourceTree = "<group>"; };
+		AA2000000000000000000003 /* SelectionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionClient.swift; sourceTree = "<group>"; };
+		AA2000000000000000000004 /* ShotLensLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotLensLanguage.swift; sourceTree = "<group>"; };
+		AA2000000000000000000005 /* ShotLensLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotLensLogger.swift; sourceTree = "<group>"; };
+		AA2000000000000000000006 /* TextLayoutOptimizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextLayoutOptimizer.swift; sourceTree = "<group>"; };
+		AA2000000000000000000007 /* TranslationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationSettings.swift; sourceTree = "<group>"; };
 		3F8018948F1F56D58139355C /* TranslationResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationResult.swift; sourceTree = "<group>"; };
 		C3B498451C1DB5664DC17DC2 /* ShortcutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorder.swift; sourceTree = "<group>"; };
+		AA2000000000000000000008 /* ShotLens.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = ShotLens.icns; sourceTree = "<group>"; };
+		AA2000000000000000000009 /* ShotLensMenuBarTemplate.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ShotLensMenuBarTemplate.png; sourceTree = "<group>"; };
 		6DC73B794219B102D365D941 /* ShotLens.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShotLens.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -41,6 +59,7 @@
 				7044FDE7B611380FA39AFDAB /* Core */,
 				994D004771ABC821D4593775 /* Models */,
 				464A425C1942D62BBECA37D0 /* Preferences */,
+				AA3000000000000000000001 /* Resources */,
 				63FE5851797848E884B4EDB6 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -49,6 +68,7 @@
 			isa = PBXGroup;
 			children = (
 				1CC6C18ACBA6695EE116D9CA /* ShotLensApp.swift */,
+				AA2000000000000000000001 /* MainWindow.swift */,
 				277C497D337A8828C1CFFCC1 /* Info.plist */,
 			);
 			path = App;
@@ -62,6 +82,12 @@
 				F70274E80564831602C46BC1 /* TranslationProvider.swift */,
 				3FBF622045FA1CCE5071C395 /* OverlayWindow.swift */,
 				F13450B6D333B20F2D8454CE /* ClipboardManager.swift */,
+				AA2000000000000000000002 /* LLMTranslator.swift */,
+				AA2000000000000000000003 /* SelectionClient.swift */,
+				AA2000000000000000000004 /* ShotLensLanguage.swift */,
+				AA2000000000000000000005 /* ShotLensLogger.swift */,
+				AA2000000000000000000006 /* TextLayoutOptimizer.swift */,
+				AA2000000000000000000007 /* TranslationSettings.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -82,6 +108,15 @@
 			path = Preferences;
 			sourceTree = "<group>";
 		};
+		AA3000000000000000000001 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				AA2000000000000000000008 /* ShotLens.icns */,
+				AA2000000000000000000009 /* ShotLensMenuBarTemplate.png */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		63FE5851797848E884B4EDB6 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -99,6 +134,7 @@
 			buildPhases = (
 				FC51F675CFA04504BC9B299A /* Sources */,
 				B5A3F4F52FFF7C0F6AFDE25E /* Frameworks */,
+				AA4000000000000000000001 /* Resources */,
 			);
 			buildRules = ();
 			dependencies = ();
@@ -140,17 +176,36 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		AA4000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA1000000000000000000008 /* ShotLens.icns in Resources */,
+				AA1000000000000000000009 /* ShotLensMenuBarTemplate.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		FC51F675CFA04504BC9B299A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				B8116981EAFA01D4CE4DD131 /* ShotLensApp.swift in Sources */,
+				AA1000000000000000000001 /* MainWindow.swift in Sources */,
 				14FDEAE64D465E0F08C18F47 /* ScreenshotCapture.swift in Sources */,
 				3A9FAEEC0162DA5D499E526D /* OCREngine.swift in Sources */,
 				5E8CE4ABA0F7DEC953079B77 /* TranslationProvider.swift in Sources */,
 				BD964147A26324B530AFF011 /* OverlayWindow.swift in Sources */,
 				2F97AF1B16D3F0F613C1C2CF /* ClipboardManager.swift in Sources */,
+				AA1000000000000000000002 /* LLMTranslator.swift in Sources */,
+				AA1000000000000000000003 /* SelectionClient.swift in Sources */,
+				AA1000000000000000000004 /* ShotLensLanguage.swift in Sources */,
+				AA1000000000000000000005 /* ShotLensLogger.swift in Sources */,
+				AA1000000000000000000006 /* TextLayoutOptimizer.swift in Sources */,
+				AA1000000000000000000007 /* TranslationSettings.swift in Sources */,
 				F279A23EB340264A391C9A83 /* TranslationResult.swift in Sources */,
 				2A87E29B1CCF1E2196F278C6 /* ShortcutRecorder.swift in Sources */,
 			);
@@ -212,7 +267,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -269,7 +324,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -296,7 +351,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qingcheng.shotlens;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -325,7 +380,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qingcheng.shotlens;
 				PRODUCT_NAME = "$(TARGET_NAME)";

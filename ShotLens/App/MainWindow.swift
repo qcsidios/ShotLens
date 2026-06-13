@@ -1,10 +1,12 @@
 import AppKit
 import CoreGraphics
+import ServiceManagement
 
 final class MainWindowController: NSObject, NSTextFieldDelegate {
     private var window: NSWindow?
     private var permissionStatusLabel: NSTextField?
     private var apiStatusLabel: NSTextField?
+    private var launchAtLoginCheckbox: NSButton?
     private let apiEndpointField = NSTextField()
     private let apiKeyField = NSSecureTextField()
     private let modelField = NSTextField()
@@ -62,7 +64,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     private func makeWindow() -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 560),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -71,7 +73,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         window.isReleasedWhenClosed = false
         window.animationBehavior = .none
 
-        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 500))
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 560))
         contentView.wantsLayer = true
         contentView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         window.contentView = contentView
@@ -94,6 +96,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         root.addArrangedSubview(makeHeader())
         root.addArrangedSubview(makePermissionCard())
         root.addArrangedSubview(makeShortcutCard())
+        root.addArrangedSubview(makeStartupCard())
         root.addArrangedSubview(makeAPICard())
         root.addArrangedSubview(makeFooter())
 
@@ -118,7 +121,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         textStack.spacing = 2
 
         textStack.addArrangedSubview(label("ShotLens", font: .systemFont(ofSize: 24, weight: .semibold)))
-        textStack.addArrangedSubview(label("截图翻译控制台", font: .systemFont(ofSize: 13), color: .secondaryLabelColor))
+        textStack.addArrangedSubview(label("截图翻译控制台 · 版本 \(displayVersion)", font: .systemFont(ofSize: 13), color: .secondaryLabelColor))
 
         row.addArrangedSubview(icon)
         row.addArrangedSubview(textStack)
@@ -152,6 +155,34 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         row.addArrangedSubview(spacer)
         row.addArrangedSubview(status)
         row.addArrangedSubview(button)
+        card.addArrangedSubview(row)
+        return card
+    }
+
+    private func makeStartupCard() -> NSView {
+        let card = makeCard()
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 12
+
+        let textStack = NSStackView()
+        textStack.orientation = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 3
+        textStack.addArrangedSubview(label("开机自动启动", font: .systemFont(ofSize: 15, weight: .semibold)))
+        textStack.addArrangedSubview(label("登录 Mac 后自动启动 ShotLens。", font: .systemFont(ofSize: 12), color: .secondaryLabelColor))
+
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let checkbox = NSButton(checkboxWithTitle: "", target: self, action: #selector(launchAtLoginChanged))
+        checkbox.state = launchAtLoginEnabled ? .on : .off
+        launchAtLoginCheckbox = checkbox
+
+        row.addArrangedSubview(textStack)
+        row.addArrangedSubview(spacer)
+        row.addArrangedSubview(checkbox)
         card.addArrangedSubview(row)
         return card
     }
@@ -284,11 +315,25 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         return field
     }
 
+    private var displayVersion: String {
+        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let normalized = shortVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let normalized, !normalized.isEmpty else { return "v1.0" }
+        if normalized.hasPrefix("v") { return normalized }
+        if normalized.hasPrefix("V") { return "v\(normalized.dropFirst())" }
+        return "v\(normalized)"
+    }
+
+    private var launchAtLoginEnabled: Bool {
+        SMAppService.mainApp.status == .enabled
+    }
+
     private func loadSettings() {
         let settings = TranslationSettings.load()
         apiEndpointField.stringValue = settings.apiEndpoint
         apiKeyField.stringValue = settings.apiKey
         modelField.stringValue = settings.model
+        launchAtLoginCheckbox?.state = launchAtLoginEnabled ? .on : .off
     }
 
     private func refreshStatus() {
@@ -336,6 +381,20 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     @objc private func openPermissionsClicked() {
         onOpenPermissions?()
+    }
+
+    @objc private func launchAtLoginChanged() {
+        let shouldEnable = launchAtLoginCheckbox?.state == .on
+        do {
+            if shouldEnable {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            launchAtLoginCheckbox?.state = launchAtLoginEnabled ? .on : .off
+            ShotLensLogger.log("更新开机自动启动失败", error: error)
+        }
     }
 
     @objc private func settingsDidChange() {
