@@ -104,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - 菜单栏
 
     private func setupMenuBar() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.isVisible = true
 
         if let button = item.button {
@@ -159,36 +159,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let image = NSImage(size: size)
         image.lockFocus()
 
-        NSColor.black.setStroke()
-        let line = NSBezierPath()
-        line.lineWidth = 1.8
-        line.lineCapStyle = .round
-        line.lineJoinStyle = .round
-
-        let inset: CGFloat = 3.2
-        let corner: CGFloat = 4.8
-        line.move(to: NSPoint(x: inset, y: inset + corner))
-        line.line(to: NSPoint(x: inset, y: inset))
-        line.line(to: NSPoint(x: inset + corner, y: inset))
-        line.move(to: NSPoint(x: size.width - inset - corner, y: inset))
-        line.line(to: NSPoint(x: size.width - inset, y: inset))
-        line.line(to: NSPoint(x: size.width - inset, y: inset + corner))
-        line.move(to: NSPoint(x: inset, y: size.height - inset - corner))
-        line.line(to: NSPoint(x: inset, y: size.height - inset))
-        line.line(to: NSPoint(x: inset + corner, y: size.height - inset))
-        line.move(to: NSPoint(x: size.width - inset - corner, y: size.height - inset))
-        line.line(to: NSPoint(x: size.width - inset, y: size.height - inset))
-        line.line(to: NSPoint(x: size.width - inset, y: size.height - inset - corner))
-        line.stroke()
-
-        let centerLine = NSBezierPath()
-        centerLine.lineWidth = 1.6
-        centerLine.lineCapStyle = .round
-        centerLine.move(to: NSPoint(x: 6.0, y: 8.0))
-        centerLine.line(to: NSPoint(x: 12.0, y: 8.0))
-        centerLine.move(to: NSPoint(x: 6.0, y: 11.0))
-        centerLine.line(to: NSPoint(x: 12.0, y: 11.0))
-        centerLine.stroke()
+        let text = "译" as NSString
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 14.5, weight: .black),
+            .foregroundColor: NSColor.black
+        ]
+        let textSize = text.size(withAttributes: attributes)
+        text.draw(
+            in: NSRect(
+                x: (size.width - textSize.width) / 2,
+                y: (size.height - textSize.height) / 2 + 0.5,
+                width: textSize.width,
+                height: textSize.height
+            ),
+            withAttributes: attributes
+        )
 
         image.unlockFocus()
         image.isTemplate = true

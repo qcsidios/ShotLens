@@ -30,15 +30,15 @@ ShotLens 是一个轻量级 macOS 菜单栏截图翻译工具。
 bash scripts/build-local.sh
 ```
 
-脚本默认会构建并部署 `ShotLens.app` 到 `~/Downloads`。
+脚本默认会构建 `ShotLens.app` 到 `build/local`。如需部署到其他目录，可设置 `SHOTLENS_DEPLOY_DIR`。
 
-打包 DMG：
+打包朋友分享版 DMG：
 
 ```bash
 bash scripts/package-dmg.sh
 ```
 
-DMG 会输出到 `build/release/ShotLens-1.0.dmg`。
+脚本会基于已有 `v*` tag 自动计算下一个版本，例如当前最新 tag 为 `v1.0` 时会输出 `build/release/ShotLens-v1.1.dmg`。如果要指定版本，可设置 `SHOTLENS_APP_VERSION=v1.1`。这个包没有 Apple 公证，适合发给朋友测试。对方安装后第一次打开时，需要右键点击 `ShotLens.app`，选择“打开”，再在 macOS 弹窗里确认“打开”。
 
 ### 验证
 
@@ -48,6 +48,8 @@ bash scripts/check-workflow-requirements.sh
 bash scripts/check-result-window-stability.sh
 bash scripts/check-ocr-isolation.sh
 bash scripts/check-preferences-edit-save.sh
+bash scripts/check-release-requirements.sh
+bash scripts/check-no-private-config.sh
 ```
 
 ### 创建发行版
@@ -55,24 +57,22 @@ bash scripts/check-preferences-edit-save.sh
 命令行方式：
 
 ```bash
-bash scripts/package-dmg.sh
-git tag v1.0
-git push origin v1.0
-gh release create v1.0 build/release/ShotLens-1.0.dmg \
-  --title "ShotLens 1.0" \
-  --notes "Initial public release."
+VERSION="$(bash scripts/next-release-version.sh)"
+SHOTLENS_APP_VERSION="$VERSION" bash scripts/package-dmg.sh
+git tag "$VERSION"
+git push origin "$VERSION"
+gh release create "$VERSION" "build/release/ShotLens-$VERSION.dmg" \
+  --title "ShotLens $VERSION" \
+  --notes "Friend-share DMG build. Install ShotLens.app into Applications, then use right-click Open on first launch because this package is not Apple-notarized."
 ```
 
-如果想先创建草稿发行版，加上 `--draft`：
+也可以在已提交、干净的工作区里一键创建 GitHub Release：
 
 ```bash
-gh release create v1.0 build/release/ShotLens-1.0.dmg \
-  --title "ShotLens 1.0" \
-  --notes "Initial public release." \
-  --draft
+bash scripts/release-github.sh
 ```
 
-网页方式：打开 GitHub 仓库页面，进入 `Releases`，点击 `Draft a new release`，创建或选择 `v1.0` 标签，填写标题和说明，上传 `build/release/ShotLens-1.0.dmg`，最后发布。
+网页方式：打开 GitHub 仓库页面，进入 `Releases`，点击 `Draft a new release`，创建或选择 `scripts/next-release-version.sh` 输出的 tag，填写标题和说明，上传 `build/release/ShotLens-$VERSION.dmg`，最后发布。Release 说明里请注明首次启动需要右键选择“打开”。
 
 ### 说明
 
@@ -116,15 +116,15 @@ It freezes the current screen, lets you select a region, runs OCR in a helper pr
 bash scripts/build-local.sh
 ```
 
-The script builds and deploys `ShotLens.app` to `~/Downloads` by default.
+The script builds `ShotLens.app` into `build/local` by default. Set `SHOTLENS_DEPLOY_DIR` if you want to deploy it elsewhere.
 
-To package a DMG:
+To package a friend-share DMG:
 
 ```bash
 bash scripts/package-dmg.sh
 ```
 
-The DMG is written to `build/release/ShotLens-1.0.dmg`.
+The script computes the next release version from existing `v*` tags. For example, if the latest tag is `v1.0`, it writes `build/release/ShotLens-v1.1.dmg`. Set `SHOTLENS_APP_VERSION=v1.1` to override the version. This build is not Apple-notarized and is intended for sharing with friends. On first launch, install the app and use right-click Open on `ShotLens.app`, then confirm Open in the macOS dialog.
 
 ### Verification
 
@@ -134,6 +134,8 @@ bash scripts/check-workflow-requirements.sh
 bash scripts/check-result-window-stability.sh
 bash scripts/check-ocr-isolation.sh
 bash scripts/check-preferences-edit-save.sh
+bash scripts/check-release-requirements.sh
+bash scripts/check-no-private-config.sh
 ```
 
 ### Create A Release
@@ -141,24 +143,22 @@ bash scripts/check-preferences-edit-save.sh
 With the GitHub CLI:
 
 ```bash
-bash scripts/package-dmg.sh
-git tag v1.0
-git push origin v1.0
-gh release create v1.0 build/release/ShotLens-1.0.dmg \
-  --title "ShotLens 1.0" \
-  --notes "Initial public release."
+VERSION="$(bash scripts/next-release-version.sh)"
+SHOTLENS_APP_VERSION="$VERSION" bash scripts/package-dmg.sh
+git tag "$VERSION"
+git push origin "$VERSION"
+gh release create "$VERSION" "build/release/ShotLens-$VERSION.dmg" \
+  --title "ShotLens $VERSION" \
+  --notes "Friend-share DMG build. Install ShotLens.app into Applications, then use right-click Open on first launch because this package is not Apple-notarized."
 ```
 
-Add `--draft` if you want to create a draft release first:
+You can also create the GitHub Release in one command from a committed, clean worktree:
 
 ```bash
-gh release create v1.0 build/release/ShotLens-1.0.dmg \
-  --title "ShotLens 1.0" \
-  --notes "Initial public release." \
-  --draft
+bash scripts/release-github.sh
 ```
 
-From the GitHub website: open the repository, go to `Releases`, click `Draft a new release`, create or select the `v1.0` tag, fill in the title and notes, upload `build/release/ShotLens-1.0.dmg`, then publish it.
+From the GitHub website: open the repository, go to `Releases`, click `Draft a new release`, create or select the tag printed by `scripts/next-release-version.sh`, fill in the title and notes, upload `build/release/ShotLens-$VERSION.dmg`, then publish it. Mention in the release notes that first launch requires right-click Open.
 
 ### Notes
 

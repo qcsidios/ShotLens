@@ -14,6 +14,8 @@ SETTINGS="$ROOT_DIR/ShotLens/Core/TranslationSettings.swift"
 PROVIDER="$ROOT_DIR/ShotLens/Core/TranslationProvider.swift"
 BUILD_SCRIPT="$ROOT_DIR/scripts/build-local.sh"
 DMG_SCRIPT="$ROOT_DIR/scripts/package-dmg.sh"
+NEXT_VERSION_SCRIPT="$ROOT_DIR/scripts/next-release-version.sh"
+PRIVATE_CONFIG_SCRIPT="$ROOT_DIR/scripts/check-no-private-config.sh"
 
 if [[ -e "$ROOT_DIR/ShotLens/Core/SelectionOverlay.swift" ]]; then
   echo "Old in-process SelectionOverlay must be removed; ShotLensSelect owns selection." >&2
@@ -28,15 +30,20 @@ if rg -n 'SelectionOverlay|CGRect\+Vision|E640D5BF74FBB8C9742B08E9|97EEAF52C4C8E
   exit 1
 fi
 
-rg -n 'APP_VERSION="1\.0"' "$BUILD_SCRIPT" >/dev/null
-rg -n 'APP_BUILD="1"' "$BUILD_SCRIPT" >/dev/null
+test -x "$NEXT_VERSION_SCRIPT"
+test -x "$PRIVATE_CONFIG_SCRIPT"
+rg -n 'APP_VERSION="\$\{SHOTLENS_APP_VERSION:-v1\.0\}"' "$BUILD_SCRIPT" >/dev/null
+rg -n 'BUNDLE_SHORT_VERSION="\$\{APP_VERSION#v\}"' "$BUILD_SCRIPT" >/dev/null
+rg -n 'APP_BUILD="\$\{SHOTLENS_APP_BUILD:-1\}"' "$BUILD_SCRIPT" >/dev/null
 rg -n 'MIN_MACOS_VERSION="14\.0"' "$BUILD_SCRIPT" >/dev/null
-rg -n '<string>\$APP_VERSION</string>' "$BUILD_SCRIPT" >/dev/null
+rg -n '<string>\$BUNDLE_SHORT_VERSION</string>' "$BUILD_SCRIPT" >/dev/null
 rg -n '<string>\$APP_BUILD</string>' "$BUILD_SCRIPT" >/dev/null
 rg -n '<string>\$MIN_MACOS_VERSION</string>' "$BUILD_SCRIPT" >/dev/null
 test -x "$DMG_SCRIPT"
+rg -n 'next-release-version\.sh' "$DMG_SCRIPT" >/dev/null
 rg -n 'hdiutil create' "$DMG_SCRIPT" >/dev/null
 rg -n 'ShotLens-\$APP_VERSION\.dmg' "$DMG_SCRIPT" >/dev/null
+rg -n 'check-no-private-config\.sh' "$DMG_SCRIPT" >/dev/null
 
 rg -n 'capture\(selection' "$CAPTURE" >/dev/null
 rg -n 'hasScreenCaptureAccess\(\)' "$APP" >/dev/null
@@ -56,11 +63,11 @@ sed -n '/func applicationDidFinishLaunching/,/func applicationShouldTerminateAft
 rg -n 'ShotLens 控制台' "$MAIN" >/dev/null
 rg -n 'disableAutomaticTermination' "$APP" >/dev/null
 rg -n 'makeMenuBarTemplateIcon\(\)' "$APP" >/dev/null
-rg -n 'statusItem\(withLength: NSStatusItem\.variableLength\)' "$APP" >/dev/null
+rg -n 'statusItem\(withLength: NSStatusItem\.squareLength\)' "$APP" >/dev/null
 rg -n 'image\.isTemplate = true' "$APP" >/dev/null
 rg -n 'button\.imagePosition = \.imageOnly' "$APP" >/dev/null
-if rg -n 'button\.title = "译"|let text = "译"|text\.draw' "$APP"; then
-  echo "Menu bar icon must be a simplified template image, not a text title." >&2
+if rg -n 'button\.title = "义"|let text = "义"' "$APP"; then
+  echo "Menu bar icon must use the 翻译的译 glyph, not 义." >&2
   exit 1
 fi
 ICON_GENERATOR="$ROOT_DIR/scripts/generate-shotlens-icons.swift"
