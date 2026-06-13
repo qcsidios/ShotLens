@@ -19,11 +19,12 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     private enum ConnectionState {
         case notConfigured
+        case untested
         case testing
         case available
         case unavailable
     }
-    private var connectionState: ConnectionState = .notConfigured
+    private var connectionState: ConnectionState = .untested
     private var connectionTestTask: Task<Void, Never>?
 
     private var pendingSave: DispatchWorkItem?
@@ -497,7 +498,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         launchAtLoginCheckbox?.state = launchAtLoginEnabled ? .on : .off
 
         // 不自动测试，等用户手动点击「测试」按钮
-        connectionState = settings.isLLMConfigured ? .notConfigured : .notConfigured
+        connectionState = .untested
         refreshStatus()
     }
 
@@ -513,6 +514,9 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         switch connectionState {
         case .notConfigured:
             apiStatusLabel?.stringValue = "● 未配置"
+            apiStatusLabel?.textColor = .secondaryLabelColor
+        case .untested:
+            apiStatusLabel?.stringValue = "● 未测试"
             apiStatusLabel?.textColor = .secondaryLabelColor
         case .testing:
             apiStatusLabel?.stringValue = "● 测试中…"
@@ -592,6 +596,12 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         isApiKeyVisible = false
         apiKeyAutoRevealed = false
         loadSettings()
+        refreshStatus()
+    }
+
+    private func markUntested() {
+        connectionState = .untested
+        availableModels = []
         refreshStatus()
     }
 
@@ -781,21 +791,24 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
             }
 
             if field === apiEndpointField || field === apiKeyField {
-                connectionState = .notConfigured
-                availableModels = []
-                refreshStatus()
+                markUntested()
             }
         }
         saveSettingsSoon()
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {
-        // 点击密文输入框后自动显示明文，失焦恢复密文
-        if obj.object as? NSTextField === apiKeyField, apiKeyAutoRevealed {
-            apiKeyAutoRevealed = false
-            isApiKeyVisible = false
-            updateApiKeyDisplay()
-            updateApiKeyEyeIcon()
+        if obj.object as? NSTextField === apiKeyField {
+            // 失焦前最后一次同步，防止极端情况下 apiKeyValue 未更新
+            if isApiKeyVisible {
+                apiKeyValue = apiKeyField.stringValue
+            }
+            if apiKeyAutoRevealed {
+                apiKeyAutoRevealed = false
+                isApiKeyVisible = false
+                updateApiKeyDisplay()
+                updateApiKeyEyeIcon()
+            }
         }
         pendingSave?.cancel()
         currentDraftSettings().save()
