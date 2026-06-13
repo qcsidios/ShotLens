@@ -10,7 +10,7 @@ if [[ ! -d "$TARGET_PATH" ]]; then
 fi
 
 expected_items=$'Applications\nShotLens.app'
-actual_items="$(find "$TARGET_PATH" -maxdepth 1 -mindepth 1 -exec basename {} \; | sort)"
+actual_items="$(find "$TARGET_PATH" -maxdepth 1 -mindepth 1 ! -name '.DS_Store' -exec basename {} \; | sort)"
 
 if [[ "$actual_items" != "$expected_items" ]]; then
   echo "DMG must contain only ShotLens.app and Applications." >&2

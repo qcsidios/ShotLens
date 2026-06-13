@@ -9,7 +9,7 @@ struct LLMTranslator: TranslationProvider {
             throw TranslationError.llmNotConfigured
         }
 
-        guard let url = URL(string: settings.apiEndpoint) else {
+        guard let url = settings.chatCompletionsURL else {
             throw TranslationError.invalidLLMEndpoint
         }
 
@@ -88,26 +88,56 @@ struct LLMTranslator: TranslationProvider {
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        var values = Array(repeating: "", count: expectedCount)
-        var matched = 0
+        var parsedLines: [(index: Int, text: String)] = []
         for rawLine in normalized.components(separatedBy: .newlines) {
             let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !line.isEmpty else { continue }
-            let parts = line.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
-            guard parts.count == 2,
-                  let index = Int(parts[0].trimmingCharacters(in: .whitespacesAndNewlines)),
-                  index >= 0,
-                  index < expectedCount else {
-                continue
+
+            if let parsed = parseNumberedTranslationLine(line) {
+                parsedLines.append(parsed)
             }
-            values[index] = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
-            matched += 1
         }
 
-        guard matched == expectedCount, values.allSatisfy({ !$0.isEmpty }) else {
+        guard parsedLines.count == expectedCount else {
             return nil
         }
+
+        let rawIndexes = parsedLines.map(\.index)
+        let usesZeroBasedIndexes = rawIndexes.allSatisfy { (0..<expectedCount).contains($0) }
+        let usesOneBasedIndexes = rawIndexes.allSatisfy { (1...expectedCount).contains($0) }
+        guard usesZeroBasedIndexes || usesOneBasedIndexes else { return nil }
+
+        var values = Array(repeating: "", count: expectedCount)
+        var seenIndexes = Set<Int>()
+        for parsed in parsedLines {
+            let normalizedIndex = usesZeroBasedIndexes ? parsed.index : parsed.index - 1
+            guard !seenIndexes.contains(normalizedIndex) else { return nil }
+            values[normalizedIndex] = parsed.text
+            seenIndexes.insert(normalizedIndex)
+        }
+
+        guard values.allSatisfy({ !$0.isEmpty }) else { return nil }
         return values
+    }
+
+    private func parseNumberedTranslationLine(_ line: String) -> (index: Int, text: String)? {
+        let pattern = #"^\s*(\d+)\s*(?:\t|[.)、:：-])\s*(.+?)\s*$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let nsLine = line as NSString
+        let match = regex.firstMatch(
+            in: line,
+            range: NSRange(location: 0, length: nsLine.length)
+        )
+        guard let match,
+              match.numberOfRanges == 3,
+              let index = Int(nsLine.substring(with: match.range(at: 1))) else {
+            return nil
+        }
+
+        let text = nsLine.substring(with: match.range(at: 2))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        return (index, text)
     }
 
     private func parseStringArray(from content: String) throws -> [String] {
@@ -128,7 +158,7 @@ struct LLMTranslator: TranslationProvider {
         }
 
         guard let data = jsonText.data(using: .utf8),
-              let values = try JSONSerialization.jsonObject(with: data) as? [String] else {
+              let values = try? JSONSerialization.jsonObject(with: data) as? [String] else {
             throw TranslationError.invalidLLMResponse
         }
         return values

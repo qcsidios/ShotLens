@@ -637,37 +637,15 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         }
 
         let settings = currentDraftSettings()
-        let endpoint = settings.apiEndpoint
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: "\(endpoint)/models") else {
-            connectionState = .unavailable
-            refreshStatus()
-            return
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 8
-
+        connectionTestTask?.cancel()
+        connectionTestTask =
         Task { [weak self] in
             guard let self else { return }
-            do {
-                let (_, response) = try await URLSession.shared.data(for: request)
-                await MainActor.run {
-                    if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
-                        self.connectionState = .available
-                    } else {
-                        self.connectionState = .unavailable
-                    }
-                    self.refreshStatus()
-                }
-            } catch {
-                await MainActor.run {
-                    self.connectionState = .unavailable
-                    self.refreshStatus()
-                }
+            let available = await LLMConnectionChecker(settings: settings).isAvailable()
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self.connectionState = available ? .available : .unavailable
+                self.refreshStatus()
             }
         }
     }
@@ -705,10 +683,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let settings = currentDraftSettings()
         modelArrowButton.isEnabled = false
 
-        let endpoint = settings.apiEndpoint
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: "\(endpoint)/models") else {
+        guard let url = settings.modelsURL else {
             modelArrowButton.isEnabled = true
             setArrowExpanded(false)
             return

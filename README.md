@@ -43,12 +43,9 @@ bash scripts/package-dmg.sh
 ### 验证
 
 ```bash
-bash scripts/check-render-completeness.sh
-bash scripts/check-workflow-requirements.sh
-bash scripts/check-result-window-stability.sh
-bash scripts/check-ocr-isolation.sh
-bash scripts/check-preferences-edit-save.sh
-bash scripts/check-release-requirements.sh
+bash scripts/check-translation-endpoint.sh
+bash scripts/check-project-integrity.sh
+bash scripts/build-local.sh
 bash scripts/check-no-private-config.sh
 bash scripts/check-dmg-layout.sh
 ```
@@ -130,12 +127,9 @@ The script computes the next release version from existing `v*` tags. For exampl
 ### Verification
 
 ```bash
-bash scripts/check-render-completeness.sh
-bash scripts/check-workflow-requirements.sh
-bash scripts/check-result-window-stability.sh
-bash scripts/check-ocr-isolation.sh
-bash scripts/check-preferences-edit-save.sh
-bash scripts/check-release-requirements.sh
+bash scripts/check-translation-endpoint.sh
+bash scripts/check-project-integrity.sh
+bash scripts/build-local.sh
 bash scripts/check-no-private-config.sh
 bash scripts/check-dmg-layout.sh
 ```

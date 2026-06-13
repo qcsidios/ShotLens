@@ -15,6 +15,32 @@ struct TranslationSettings {
             && !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    var chatCompletionsURL: URL? {
+        let endpoint = normalizedEndpointString
+        guard !endpoint.isEmpty else { return nil }
+
+        if endpoint.caseInsensitiveHasSuffixPath("/chat/completions") {
+            return URL(string: endpoint)
+        }
+        if endpoint.caseInsensitiveHasSuffixPath("/models") {
+            return URL(string: endpoint.droppingPathSuffix("/models") + "/chat/completions")
+        }
+        return URL(string: endpoint + "/chat/completions")
+    }
+
+    var modelsURL: URL? {
+        let endpoint = normalizedEndpointString
+        guard !endpoint.isEmpty else { return nil }
+
+        if endpoint.caseInsensitiveHasSuffixPath("/models") {
+            return URL(string: endpoint)
+        }
+        if endpoint.caseInsensitiveHasSuffixPath("/chat/completions") {
+            return URL(string: endpoint.droppingPathSuffix("/chat/completions") + "/models")
+        }
+        return URL(string: endpoint + "/models")
+    }
+
     var apiAvailabilityText: String {
         isLLMConfigured ? "API 已配置" : "API 未配置"
     }
@@ -48,5 +74,22 @@ struct TranslationSettings {
         defaults.removeObject(forKey: modelKey)
         defaults.synchronize()
         NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
+
+    private var normalizedEndpointString: String {
+        apiEndpoint
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+}
+
+private extension String {
+    func caseInsensitiveHasSuffixPath(_ suffix: String) -> Bool {
+        lowercased().hasSuffix(suffix.lowercased())
+    }
+
+    func droppingPathSuffix(_ suffix: String) -> String {
+        guard caseInsensitiveHasSuffixPath(suffix) else { return self }
+        return String(dropLast(suffix.count))
     }
 }

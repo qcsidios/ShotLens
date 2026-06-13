@@ -44,6 +44,7 @@ source_paths=(
   "$ROOT_DIR/README.md"
   "$ROOT_DIR/ShotLens"
   "$ROOT_DIR/ShotLens.xcodeproj"
+  "$ROOT_DIR/Tests"
   "$ROOT_DIR/scripts"
 )
 
