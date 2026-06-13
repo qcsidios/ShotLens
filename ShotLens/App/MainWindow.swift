@@ -8,7 +8,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private var apiStatusLabel: NSTextField?
     private var launchAtLoginCheckbox: NSButton?
     private let apiEndpointField = NSTextField()
-    private let apiKeyField = NSSecureTextField()
+    private let apiKeyField = NSTextField()
     private let modelField = NSTextField()
     private var pendingSave: DispatchWorkItem?
 

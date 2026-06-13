@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppDelegate.shared = self
         ProcessInfo.processInfo.disableAutomaticTermination("ShotLens stays active for menu bar capture")
         NSApp.setActivationPolicy(.regular)
+        setupMainMenu()
         setupMenuBar()
         installHotKeyHandler()
         registerGlobalHotKey()
@@ -99,6 +100,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func startCapture() {
         handleHotKey()
+    }
+
+    // MARK: - 主菜单
+
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+        NSApp.mainMenu = mainMenu
+
+        // ── 应用菜单 ──
+        let appMenu = NSMenu()
+        let appMenuItem = mainMenu.addItem(withTitle: "ShotLens", action: nil, keyEquivalent: "")
+        appMenuItem.submenu = appMenu
+        appMenu.addItem(withTitle: "关于 ShotLens", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "退出 ShotLens", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        // ── 编辑菜单（Cmd+V/Cmd+C/Cmd+X 依赖这个）──
+        let editMenu = NSMenu(title: "编辑")
+        let editMenuItem = mainMenu.addItem(withTitle: "编辑", action: nil, keyEquivalent: "")
+        editMenuItem.submenu = editMenu
+        editMenu.addItem(withTitle: "撤销", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "重做", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "剪切", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "拷贝", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
     }
 
     // MARK: - 菜单栏
