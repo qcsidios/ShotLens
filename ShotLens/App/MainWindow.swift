@@ -241,8 +241,6 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         card.addArrangedSubview(headerRow)
 
         configureField(apiEndpointField, placeholder: "")
-        configureField(apiKeyRealField, placeholder: "")
-        configureField(apiKeySecureField, placeholder: "")
         configureField(modelField, placeholder: "")
 
         card.addArrangedSubview(fieldRow("地址", field: apiEndpointField))
@@ -310,48 +308,56 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let titleLabel = label("API Key", font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
         titleLabel.widthAnchor.constraint(equalToConstant: 52).isActive = true
 
-        // 文本框容器：与地址/模型等宽 356，眼图标叠在内部右侧
-        let containerW: CGFloat = 356
-        let containerH: CGFloat = 28
-        let eyeW: CGFloat = 22
-
-        let fieldContainer = NSView()
-        fieldContainer.translatesAutoresizingMaskIntoConstraints = false
-        fieldContainer.widthAnchor.constraint(equalToConstant: containerW).isActive = true
-        fieldContainer.heightAnchor.constraint(equalToConstant: containerH).isActive = true
-
-        // 文本框撑满容器，和地址/模型等宽
-        let fieldFrame = NSRect(x: 0, y: 0, width: containerW, height: containerH)
-        [apiKeyRealField, apiKeySecureField].forEach { field in
-            field.frame = fieldFrame
-            field.autoresizingMask = [.width, .height]
+        // 配置两个 Key 字段：字体、代理、样式、禁止换行
+        func setupKeyField(_ field: NSTextField) {
+            field.font = .systemFont(ofSize: 13)
+            field.delegate = self
+            field.bezelStyle = .roundedBezel
             field.cell?.wraps = false
             field.cell?.isScrollable = true
             field.usesSingleLineMode = true
             field.lineBreakMode = .byTruncatingTail
+            field.translatesAutoresizingMaskIntoConstraints = false
         }
-        apiKeySecureField.isHidden = true
-        fieldContainer.addSubview(apiKeyRealField)
-        fieldContainer.addSubview(apiKeySecureField)
+        setupKeyField(apiKeyRealField)
+        setupKeyField(apiKeySecureField)
 
-        // 眼睛图标：盖在文本框右侧内部
+        // 容器：356×28，和地址/模型完全相同
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.widthAnchor.constraint(equalToConstant: 356).isActive = true
+        container.heightAnchor.constraint(equalToConstant: 28).isActive = true
+
+        // 两个 field 都撑满容器，一次只显示一个
+        for field in [apiKeyRealField, apiKeySecureField] {
+            container.addSubview(field)
+            NSLayoutConstraint.activate([
+                field.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                field.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                field.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                field.heightAnchor.constraint(equalToConstant: 28),
+            ])
+        }
+        apiKeySecureField.isHidden = true  // 默认明文
+
+        // 眼图标：盖在容器右侧
         apiKeyEyeButton.bezelStyle = .inline
         apiKeyEyeButton.isBordered = false
         apiKeyEyeButton.imagePosition = .imageOnly
         apiKeyEyeButton.target = self
         apiKeyEyeButton.action = #selector(toggleApiKeyVisibility)
-        apiKeyEyeButton.frame = NSRect(
-            x: containerW - eyeW - 4,
-            y: (containerH - eyeW) / 2,
-            width: eyeW,
-            height: eyeW
-        )
-        apiKeyEyeButton.autoresizingMask = [.minXMargin]
+        apiKeyEyeButton.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(apiKeyEyeButton)
+        NSLayoutConstraint.activate([
+            apiKeyEyeButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4),
+            apiKeyEyeButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            apiKeyEyeButton.widthAnchor.constraint(equalToConstant: 22),
+            apiKeyEyeButton.heightAnchor.constraint(equalToConstant: 22),
+        ])
         updateApiKeyEyeIcon()
-        fieldContainer.addSubview(apiKeyEyeButton)
 
         row.addArrangedSubview(titleLabel)
-        row.addArrangedSubview(fieldContainer)
+        row.addArrangedSubview(container)
         return row
     }
 
