@@ -336,6 +336,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func executeTranslationFlow() async {
+        // 从文本框直接抓设置，不依赖 UserDefaults 时序
+        let translationSettings = await MainActor.run { mainWindowController.currentDraftSettings() }
+
         let capture = ScreenshotCapture()
 
         guard capture.hasScreenCaptureAccess() else {
@@ -396,7 +399,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         await showInteractiveOverlay(
             captured: captured,
             selection: selection,
-            displayScale: displayScale
+            displayScale: displayScale,
+            translationSettings: translationSettings
         )
     }
 
@@ -409,7 +413,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func translate(
         captured: CapturedScreenshot,
         displayScale: CGFloat,
-        overlay: OverlayWindow?
+        overlay: OverlayWindow?,
+        settings: TranslationSettings
     ) async {
         overlay?.setProcessing("正在识别文字...")
 
@@ -443,7 +448,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let sourceLang = ShotLensLanguage.preferredSourceLanguage(for: layoutBlocks)
         let targetLang = Locale.preferredLanguages.first ?? "zh-Hans"
 
-        let provider = TranslationProviderFactory.create()
+        let provider = TranslationProviderFactory.create(with: settings)
         let texts = layoutBlocks.map { $0.text }
         let translationStartedAt = Date()
         let translatedTexts: [String]
@@ -451,7 +456,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             translatedTexts = try await provider.translate(texts, from: sourceLang, to: targetLang)
         } catch {
             ShotLensLogger.log("翻译失败", error: error)
-            overlay?.setMessage("翻译失败")
+            let message = error.localizedDescription
+            overlay?.setMessage(message.isEmpty ? "翻译失败" : message)
             return
         }
         ShotLensLogger.log(String(format: "翻译完成，使用 %@，输出 %d 个文本块，耗时 %.2fs", provider.name, translatedTexts.count, Date().timeIntervalSince(translationStartedAt)))
@@ -470,7 +476,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showInteractiveOverlay(
         captured: CapturedScreenshot,
         selection: CGRect,
-        displayScale: CGFloat
+        displayScale: CGFloat,
+        translationSettings: TranslationSettings
     ) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let overlay = OverlayWindow()
@@ -486,7 +493,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     await self.translate(
                         captured: captured,
                         displayScale: displayScale,
-                        overlay: overlay
+                        overlay: overlay,
+                        settings: translationSettings
                     )
                 }
             }
@@ -501,7 +509,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await self.translate(
                     captured: captured,
                     displayScale: displayScale,
-                    overlay: overlay
+                    overlay: overlay,
+                    settings: translationSettings
                 )
             }
         }

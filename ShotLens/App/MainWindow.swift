@@ -530,7 +530,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         }
     }
 
-    private func currentDraftSettings() -> TranslationSettings {
+    func currentDraftSettings() -> TranslationSettings {
         TranslationSettings(
             apiEndpoint: apiEndpointField.stringValue,
             apiKey: apiKeyValue,

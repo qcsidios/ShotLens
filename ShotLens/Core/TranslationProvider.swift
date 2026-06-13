@@ -16,11 +16,11 @@ protocol TranslationProvider {
 
 /// 翻译引擎工厂
 struct TranslationProviderFactory {
-    /// 创建 API 翻译引擎实例
-    static func create() -> TranslationProvider {
-        let settings = TranslationSettings.load()
-        if settings.isLLMConfigured {
-            return LLMTranslator(settings: settings)
+    /// 创建 API 翻译引擎实例。传入 settings 时直接用，不传则从 UserDefaults 读取。
+    static func create(with settings: TranslationSettings? = nil) -> TranslationProvider {
+        let s = settings ?? TranslationSettings.load()
+        if s.isLLMConfigured {
+            return LLMTranslator(settings: s)
         }
         return UnavailableTranslator()
     }
