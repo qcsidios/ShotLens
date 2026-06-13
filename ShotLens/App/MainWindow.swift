@@ -8,10 +8,11 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private var apiStatusLabel: NSTextField?
     private var launchAtLoginCheckbox: NSButton?
     private let apiEndpointField = NSTextField()
-    private let apiKeyRealField = NSTextField()
-    private let apiKeySecureField = NSSecureTextField()
+    private let apiKeyField = NSTextField()
+    private var apiKeyValue = ""
     private let apiKeyEyeButton = NSButton()
     private var isApiKeyVisible = false
+    private var apiKeyAutoRevealed = false
     private let modelField = NSTextField()
     private let modelArrowButton = NSButton()
     private var availableModels: [String] = []
@@ -320,48 +321,32 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let titleLabel = label("Key", font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
         titleLabel.widthAnchor.constraint(equalToConstant: 38).isActive = true
 
-        func setupKeyField(_ field: NSTextField) {
-            field.font = .systemFont(ofSize: 13)
-            field.delegate = self
-            field.bezelStyle = .roundedBezel
-            field.cell?.wraps = false
-            field.cell?.isScrollable = true
-            field.usesSingleLineMode = true
-            field.lineBreakMode = .byTruncatingTail
-            field.translatesAutoresizingMaskIntoConstraints = false
-        }
-        setupKeyField(apiKeyRealField)
-        setupKeyField(apiKeySecureField)
+        // 普通 NSTextField，不触发系统密码提示
+        apiKeyField.font = .systemFont(ofSize: 13)
+        apiKeyField.delegate = self
+        apiKeyField.bezelStyle = .roundedBezel
+        apiKeyField.cell?.wraps = false
+        apiKeyField.cell?.isScrollable = true
+        apiKeyField.usesSingleLineMode = true
+        apiKeyField.lineBreakMode = .byTruncatingTail
+        apiKeyField.translatesAutoresizingMaskIntoConstraints = false
 
-        // 外层容器 356×28，与地址/模型等宽
+        // 外层容器 356×28
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
         container.widthAnchor.constraint(equalToConstant: 356).isActive = true
         container.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
-        // 文本框区域 334，眼图标在右侧 22（0 间距紧贴）
-        let fieldWrapper = NSView()
-        fieldWrapper.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(fieldWrapper)
+        // 文本框 328，眼图标间距 6
+        container.addSubview(apiKeyField)
         NSLayoutConstraint.activate([
-            fieldWrapper.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            fieldWrapper.widthAnchor.constraint(equalToConstant: 334),
-            fieldWrapper.topAnchor.constraint(equalTo: container.topAnchor),
-            fieldWrapper.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            apiKeyField.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            apiKeyField.widthAnchor.constraint(equalToConstant: 328),
+            apiKeyField.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            apiKeyField.heightAnchor.constraint(equalToConstant: 28),
         ])
 
-        for field in [apiKeyRealField, apiKeySecureField] {
-            fieldWrapper.addSubview(field)
-            NSLayoutConstraint.activate([
-                field.leadingAnchor.constraint(equalTo: fieldWrapper.leadingAnchor),
-                field.trailingAnchor.constraint(equalTo: fieldWrapper.trailingAnchor),
-                field.centerYAnchor.constraint(equalTo: fieldWrapper.centerYAnchor),
-                field.heightAnchor.constraint(equalToConstant: 28),
-            ])
-        }
-        apiKeyRealField.isHidden = true  // 默认保密
-
-        // 眼图标：文本框右侧独立区域
+        // 眼图标
         apiKeyEyeButton.bezelStyle = .inline
         apiKeyEyeButton.isBordered = false
         apiKeyEyeButton.imagePosition = .imageOnly
@@ -370,7 +355,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         apiKeyEyeButton.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(apiKeyEyeButton)
         NSLayoutConstraint.activate([
-            apiKeyEyeButton.leadingAnchor.constraint(equalTo: fieldWrapper.trailingAnchor),
+            apiKeyEyeButton.leadingAnchor.constraint(equalTo: apiKeyField.trailingAnchor, constant: 6),
             apiKeyEyeButton.widthAnchor.constraint(equalToConstant: 22),
             apiKeyEyeButton.heightAnchor.constraint(equalToConstant: 22),
             apiKeyEyeButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
@@ -383,23 +368,16 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     @objc private func toggleApiKeyVisibility() {
+        apiKeyAutoRevealed = false
         isApiKeyVisible.toggle()
-
-        if isApiKeyVisible {
-            // 显示明文
-            apiKeyRealField.stringValue = apiKeySecureField.stringValue
-            apiKeySecureField.isHidden = true
-            apiKeyRealField.isHidden = false
-            window?.makeFirstResponder(apiKeyRealField)
-        } else {
-            // 隐藏为圆点
-            apiKeySecureField.stringValue = apiKeyRealField.stringValue
-            apiKeyRealField.isHidden = true
-            apiKeySecureField.isHidden = false
-            window?.makeFirstResponder(apiKeySecureField)
-        }
-
+        updateApiKeyDisplay()
         updateApiKeyEyeIcon()
+    }
+
+    private func updateApiKeyDisplay() {
+        apiKeyField.stringValue = isApiKeyVisible
+            ? apiKeyValue
+            : String(repeating: "•", count: apiKeyValue.count)
     }
 
     private func updateApiKeyEyeIcon() {
@@ -407,6 +385,17 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .regular)
         apiKeyEyeButton.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(config)
     }
+
+    func controlTextDidBeginEditing(_ obj: Notification) {
+        // 点击密文 Key 输入框时自动显示明文
+        if obj.object as? NSTextField === apiKeyField, !isApiKeyVisible {
+            isApiKeyVisible = true
+            apiKeyAutoRevealed = true
+            updateApiKeyDisplay()
+            updateApiKeyEyeIcon()
+        }
+    }
+
 
     private func modelFieldRow() -> NSView {
         let row = NSStackView()
@@ -424,12 +413,12 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         container.widthAnchor.constraint(equalToConstant: 356).isActive = true
         container.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
-        // 文本框 334，箭头在右侧 22
+        // 文本框 328，箭头在右侧间距 6
         modelField.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(modelField)
         NSLayoutConstraint.activate([
             modelField.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            modelField.widthAnchor.constraint(equalToConstant: 334),
+            modelField.widthAnchor.constraint(equalToConstant: 328),
             modelField.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             modelField.heightAnchor.constraint(equalToConstant: 28),
         ])
@@ -445,7 +434,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         modelArrowButton.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(modelArrowButton)
         NSLayoutConstraint.activate([
-            modelArrowButton.leadingAnchor.constraint(equalTo: modelField.trailingAnchor),
+            modelArrowButton.leadingAnchor.constraint(equalTo: modelField.trailingAnchor, constant: 6),
             modelArrowButton.widthAnchor.constraint(equalToConstant: 22),
             modelArrowButton.heightAnchor.constraint(equalToConstant: 22),
             modelArrowButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
@@ -495,8 +484,11 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private func loadSettings() {
         let settings = TranslationSettings.load()
         apiEndpointField.stringValue = settings.apiEndpoint
-        apiKeyRealField.stringValue = settings.apiKey
-        apiKeySecureField.stringValue = settings.apiKey
+        apiKeyValue = settings.apiKey
+        isApiKeyVisible = false
+        apiKeyAutoRevealed = false
+        updateApiKeyDisplay()
+        updateApiKeyEyeIcon()
         modelField.stringValue = settings.model
         launchAtLoginCheckbox?.state = launchAtLoginEnabled ? .on : .off
 
@@ -536,7 +528,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private func currentDraftSettings() -> TranslationSettings {
         TranslationSettings(
             apiEndpoint: apiEndpointField.stringValue,
-            apiKey: apiKeyRealField.stringValue,
+            apiKey: apiKeyValue,
             model: modelField.stringValue
         )
     }
@@ -580,6 +572,9 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         TranslationSettings.resetSavedConfiguration()
         connectionState = .notConfigured
         availableModels = []
+        apiKeyValue = ""
+        isApiKeyVisible = false
+        apiKeyAutoRevealed = false
         loadSettings()
         refreshStatus()
     }
@@ -708,8 +703,8 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
             menu.addItem(.separator())
         }
         menu.addItem(NSMenuItem(title: "刷新列表", action: #selector(modelRefreshClicked), keyEquivalent: ""))
-        let buttonFrame = modelArrowButton.convert(modelArrowButton.bounds, to: nil)
-        let screenRect = window?.convertToScreen(buttonFrame) ?? .zero
+        let fieldRect = modelField.convert(modelField.bounds, to: nil)
+        let screenRect = window?.convertToScreen(fieldRect) ?? .zero
         menu.popUp(positioning: nil, at: NSPoint(x: screenRect.minX, y: screenRect.minY), in: nil)
     }
 
@@ -741,14 +736,14 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     func controlTextDidChange(_ obj: Notification) {
         if let field = obj.object as? NSTextField {
-            if field === apiKeyRealField {
-                apiKeySecureField.stringValue = apiKeyRealField.stringValue
-            } else if field === apiKeySecureField {
-                apiKeyRealField.stringValue = apiKeySecureField.stringValue
+            if field === apiKeyField {
+                // 明文编辑时直接写入，密文时忽略（显示的是圆点不是真实值）
+                if isApiKeyVisible {
+                    apiKeyValue = apiKeyField.stringValue
+                }
             }
 
-            // API 字段变动 → 重置状态并排期重新验证
-            if field === apiEndpointField || field === apiKeyRealField || field === apiKeySecureField {
+            if field === apiEndpointField || field === apiKeyField {
                 connectionState = .notConfigured
                 availableModels = []
                 refreshStatus()
@@ -759,6 +754,13 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {
+        // 点击密文输入框后自动显示明文，失焦恢复密文
+        if obj.object as? NSTextField === apiKeyField, apiKeyAutoRevealed {
+            apiKeyAutoRevealed = false
+            isApiKeyVisible = false
+            updateApiKeyDisplay()
+            updateApiKeyEyeIcon()
+        }
         pendingSave?.cancel()
         currentDraftSettings().save()
         refreshStatus()
