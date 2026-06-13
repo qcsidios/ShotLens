@@ -29,7 +29,7 @@ struct TranslationSettings {
         return TranslationSettings(
             apiEndpoint: defaults.string(forKey: apiEndpointKey) ?? "",
             apiKey: defaults.string(forKey: apiKeyKey) ?? "",
-            model: defaults.string(forKey: modelKey) ?? "gpt-4o-mini"
+            model: defaults.string(forKey: modelKey) ?? ""
         )
     }
 

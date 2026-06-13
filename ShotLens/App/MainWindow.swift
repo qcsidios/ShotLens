@@ -240,10 +240,10 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         headerRow.addArrangedSubview(status)
         card.addArrangedSubview(headerRow)
 
-        configureField(apiEndpointField, placeholder: "OpenAI-compatible chat completions endpoint")
-        configureField(apiKeyRealField, placeholder: "API Key")
-        configureField(apiKeySecureField, placeholder: "API Key")
-        configureField(modelField, placeholder: "model")
+        configureField(apiEndpointField, placeholder: "")
+        configureField(apiKeyRealField, placeholder: "")
+        configureField(apiKeySecureField, placeholder: "")
+        configureField(modelField, placeholder: "")
 
         card.addArrangedSubview(fieldRow("地址", field: apiEndpointField))
         card.addArrangedSubview(apiKeyFieldRow())
@@ -307,37 +307,52 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         row.spacing = 10
         row.widthAnchor.constraint(equalToConstant: 404).isActive = true
 
-        let titleLabel = label("Key", font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
-        titleLabel.widthAnchor.constraint(equalToConstant: 38).isActive = true
+        let titleLabel = label("API Key", font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
+        titleLabel.widthAnchor.constraint(equalToConstant: 52).isActive = true
 
-        // 两个 field 叠放在同一容器里，一次只显示一个
+        // 文本框容器：与地址/模型等宽 356，眼图标叠在内部右侧
+        let containerW: CGFloat = 356
+        let containerH: CGFloat = 28
+        let eyeW: CGFloat = 24
+        let eyeInset: CGFloat = 4
+
         let fieldContainer = NSView()
         fieldContainer.translatesAutoresizingMaskIntoConstraints = false
-        fieldContainer.widthAnchor.constraint(equalToConstant: 328).isActive = true
-        fieldContainer.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        fieldContainer.widthAnchor.constraint(equalToConstant: containerW).isActive = true
+        fieldContainer.heightAnchor.constraint(equalToConstant: containerH).isActive = true
 
-        apiKeyRealField.frame = fieldContainer.bounds
-        apiKeyRealField.autoresizingMask = [.width, .height]
-        apiKeySecureField.frame = fieldContainer.bounds
-        apiKeySecureField.autoresizingMask = [.width, .height]
+        // 文本框右侧留空给眼图标
+        let fieldFrame = NSRect(x: 0, y: 0, width: containerW - eyeW - eyeInset, height: containerH)
+        [apiKeyRealField, apiKeySecureField].forEach { field in
+            field.frame = fieldFrame
+            field.autoresizingMask = [.width, .height]
+            field.cell?.wraps = false
+            field.cell?.isScrollable = true
+            field.usesSingleLineMode = true
+            field.lineBreakMode = .byTruncatingTail
+        }
         apiKeySecureField.isHidden = true
-
         fieldContainer.addSubview(apiKeyRealField)
         fieldContainer.addSubview(apiKeySecureField)
 
-        // 眼睛图标按钮
+        // 眼睛图标：贴在容器内部右侧，垂直居中
         apiKeyEyeButton.bezelStyle = .inline
         apiKeyEyeButton.isBordered = false
         apiKeyEyeButton.imagePosition = .imageOnly
         apiKeyEyeButton.target = self
         apiKeyEyeButton.action = #selector(toggleApiKeyVisibility)
-        apiKeyEyeButton.widthAnchor.constraint(equalToConstant: 28).isActive = true
-        apiKeyEyeButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        apiKeyEyeButton.frame = NSRect(
+            x: containerW - eyeW - 2,
+            y: (containerH - eyeW) / 2,
+            width: eyeW,
+            height: eyeW
+        )
+        apiKeyEyeButton.autoresizingMask = [.minXMargin]
         updateApiKeyEyeIcon()
+        fieldContainer.addSubview(apiKeyEyeButton)
 
         row.addArrangedSubview(titleLabel)
         row.addArrangedSubview(fieldContainer)
-        row.addArrangedSubview(apiKeyEyeButton)
         return row
     }
 
