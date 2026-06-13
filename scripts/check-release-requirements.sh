@@ -7,28 +7,44 @@ MAIN="$ROOT_DIR/ShotLens/App/MainWindow.swift"
 ICON_GENERATOR="$ROOT_DIR/scripts/generate-shotlens-icons.swift"
 BUILD_SCRIPT="$ROOT_DIR/scripts/build-local.sh"
 DMG_SCRIPT="$ROOT_DIR/scripts/package-dmg.sh"
+NEXT_VERSION_SCRIPT="$ROOT_DIR/scripts/next-release-version.sh"
+PRIVATE_CONFIG_SCRIPT="$ROOT_DIR/scripts/check-no-private-config.sh"
+GITHUB_RELEASE_SCRIPT="$ROOT_DIR/scripts/release-github.sh"
 README="$ROOT_DIR/README.md"
 PROJECT="$ROOT_DIR/ShotLens.xcodeproj/project.pbxproj"
 
-rg -n 'APP_VERSION="v1\.0"' "$BUILD_SCRIPT" >/dev/null
+test -x "$NEXT_VERSION_SCRIPT"
+test -x "$PRIVATE_CONFIG_SCRIPT"
+test -x "$GITHUB_RELEASE_SCRIPT"
+
+rg -n 'APP_VERSION="\$\{SHOTLENS_APP_VERSION:-v1\.0\}"' "$BUILD_SCRIPT" >/dev/null
 rg -n 'BUNDLE_SHORT_VERSION="\$\{APP_VERSION#v\}"' "$BUILD_SCRIPT" >/dev/null
+rg -n 'APP_BUILD="\$\{SHOTLENS_APP_BUILD:-1\}"' "$BUILD_SCRIPT" >/dev/null
 rg -n 'DEPLOY_DIR="\$\{SHOTLENS_DEPLOY_DIR:-\$BUILD_DIR\}"' "$BUILD_SCRIPT" >/dev/null
 rg -n '<string>\$BUNDLE_SHORT_VERSION</string>' "$BUILD_SCRIPT" >/dev/null
 
-rg -n 'APP_VERSION="v1\.0"' "$DMG_SCRIPT" >/dev/null
+rg -n 'APP_VERSION="\$\{SHOTLENS_APP_VERSION:-\$\("\$ROOT_DIR/scripts/next-release-version\.sh"\)\}"' "$DMG_SCRIPT" >/dev/null
 rg -n 'ShotLens-\$APP_VERSION\.dmg' "$DMG_SCRIPT" >/dev/null
-rg -n 'SHOTLENS_CODESIGN_IDENTITY:\?' "$DMG_SCRIPT" >/dev/null
-rg -n 'SHOTLENS_NOTARY_PROFILE:\?' "$DMG_SCRIPT" >/dev/null
+rg -n 'SHOTLENS_CODESIGN_IDENTITY:-' "$DMG_SCRIPT" >/dev/null
+rg -n 'SHOTLENS_APP_VERSION="\$APP_VERSION"' "$DMG_SCRIPT" >/dev/null
 rg -n 'codesign --verify --deep --strict' "$DMG_SCRIPT" >/dev/null
 rg -n 'spctl --assess --type execute' "$DMG_SCRIPT" >/dev/null
 rg -n 'hdiutil verify' "$DMG_SCRIPT" >/dev/null
-rg -n 'notarytool submit' "$DMG_SCRIPT" >/dev/null
-rg -n 'stapler staple' "$DMG_SCRIPT" >/dev/null
-rg -n 'stapler validate' "$DMG_SCRIPT" >/dev/null
-rg -n 'spctl --assess --type open' "$DMG_SCRIPT" >/dev/null
-rg -n 'ShotLens-v1\.0\.dmg' "$README" >/dev/null
+rg -n 'check-no-private-config\.sh' "$DMG_SCRIPT" "$README" >/dev/null
+rg -n '安装说明-右键打开\.txt' "$DMG_SCRIPT" >/dev/null
+rg -n 'right-click Open|右键' "$DMG_SCRIPT" "$README" >/dev/null
+if rg -n 'notarytool|stapler|SHOTLENS_NOTARY_PROFILE|Set SHOTLENS_CODESIGN_IDENTITY' "$DMG_SCRIPT" "$README"; then
+  echo "Friend-share packaging must not require Apple notarization or a Developer ID identity." >&2
+  exit 1
+fi
+rg -n 'next-release-version\.sh|release-github\.sh|SHOTLENS_APP_VERSION' "$README" >/dev/null
+rg -n 'ShotLens-\$VERSION\.dmg' "$README" >/dev/null
 if rg -n 'ShotLens-V1\.0\.dmg|ShotLens-1\.0\.dmg' "$README" "$BUILD_SCRIPT" "$DMG_SCRIPT"; then
-  echo "Release docs and scripts must use ShotLens-v1.0.dmg naming only." >&2
+  echo "Release docs and scripts must use lowercase-v release naming." >&2
+  exit 1
+fi
+if rg -n 'APP_VERSION="v1\.0"' "$BUILD_SCRIPT" "$DMG_SCRIPT"; then
+  echo "Release scripts must derive the release version instead of hardcoding v1.0." >&2
   exit 1
 fi
 
