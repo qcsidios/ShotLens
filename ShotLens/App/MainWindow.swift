@@ -496,12 +496,9 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         modelField.stringValue = settings.model
         launchAtLoginCheckbox?.state = launchAtLoginEnabled ? .on : .off
 
-        // 启动时自动验证连接
-        connectionState = settings.isLLMConfigured ? .testing : .notConfigured
+        // 不自动测试，等用户手动点击「测试」按钮
+        connectionState = settings.isLLMConfigured ? .notConfigured : .notConfigured
         refreshStatus()
-        if settings.isLLMConfigured {
-            scheduleConnectionTest()
-        }
     }
 
     private func refreshStatus() {
@@ -549,8 +546,15 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     @objc private func startCaptureClicked() {
-        pendingSave?.perform()
+        flushPendingSave()
         onStartCapture?()
+    }
+
+    /// 强制保存当前草稿设置，确保翻译时 UserDefaults 是最新的
+    func flushPendingSave() {
+        pendingSave?.perform()
+        pendingSave?.cancel()
+        pendingSave = nil
     }
 
     @objc private func openPermissionsClicked() {
@@ -780,7 +784,6 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
                 connectionState = .notConfigured
                 availableModels = []
                 refreshStatus()
-                scheduleConnectionTest()
             }
         }
         saveSettingsSoon()

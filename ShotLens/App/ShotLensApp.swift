@@ -326,6 +326,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         isProcessing = true
         ShotLensLogger.log("快捷键触发")
 
+        // 确保最新设置已写入 UserDefaults，翻译链路才能读到
+        mainWindowController.flushPendingSave()
+
         Task {
             await executeTranslationFlow()
             isProcessing = false
