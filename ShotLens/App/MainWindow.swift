@@ -13,6 +13,18 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private let apiKeyEyeButton = NSButton()
     private var isApiKeyVisible = false
     private let modelField = NSTextField()
+    private let modelArrowButton = NSButton()
+    private var availableModels: [String] = []
+
+    private enum ConnectionState {
+        case notConfigured
+        case testing
+        case available
+        case unavailable
+    }
+    private var connectionState: ConnectionState = .notConfigured
+    private var connectionTestTask: Task<Void, Never>?
+
     private var pendingSave: DispatchWorkItem?
 
     private var onStartCapture: (() -> Void)?
@@ -245,7 +257,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
         card.addArrangedSubview(fieldRow("地址", field: apiEndpointField))
         card.addArrangedSubview(apiKeyFieldRow())
-        card.addArrangedSubview(fieldRow("模型", field: modelField))
+        card.addArrangedSubview(modelFieldRow())
 
         let note = label("所有翻译都走 API；OCR 会先按语义合并文本块。", font: .systemFont(ofSize: 12), color: .secondaryLabelColor)
         note.lineBreakMode = .byTruncatingTail
@@ -308,7 +320,6 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let titleLabel = label("Key", font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
         titleLabel.widthAnchor.constraint(equalToConstant: 38).isActive = true
 
-        // 配置两个 Key 字段：字体、代理、样式、禁止换行
         func setupKeyField(_ field: NSTextField) {
             field.font = .systemFont(ofSize: 13)
             field.delegate = self
@@ -322,25 +333,35 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         setupKeyField(apiKeyRealField)
         setupKeyField(apiKeySecureField)
 
-        // 容器：356×28，和地址/模型完全相同
+        // 外层容器 356×28，与地址/模型等宽
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
         container.widthAnchor.constraint(equalToConstant: 356).isActive = true
         container.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
-        // 两个 field 都撑满容器，一次只显示一个
+        // 文本框区域 334，眼图标在右侧 22（0 间距紧贴）
+        let fieldWrapper = NSView()
+        fieldWrapper.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(fieldWrapper)
+        NSLayoutConstraint.activate([
+            fieldWrapper.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            fieldWrapper.widthAnchor.constraint(equalToConstant: 334),
+            fieldWrapper.topAnchor.constraint(equalTo: container.topAnchor),
+            fieldWrapper.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
         for field in [apiKeyRealField, apiKeySecureField] {
-            container.addSubview(field)
+            fieldWrapper.addSubview(field)
             NSLayoutConstraint.activate([
-                field.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                field.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                field.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                field.leadingAnchor.constraint(equalTo: fieldWrapper.leadingAnchor),
+                field.trailingAnchor.constraint(equalTo: fieldWrapper.trailingAnchor),
+                field.centerYAnchor.constraint(equalTo: fieldWrapper.centerYAnchor),
                 field.heightAnchor.constraint(equalToConstant: 28),
             ])
         }
-        apiKeySecureField.isHidden = true  // 默认明文
+        apiKeyRealField.isHidden = true  // 默认保密
 
-        // 眼图标：盖在容器右侧
+        // 眼图标：文本框右侧独立区域
         apiKeyEyeButton.bezelStyle = .inline
         apiKeyEyeButton.isBordered = false
         apiKeyEyeButton.imagePosition = .imageOnly
@@ -349,10 +370,10 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         apiKeyEyeButton.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(apiKeyEyeButton)
         NSLayoutConstraint.activate([
-            apiKeyEyeButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4),
-            apiKeyEyeButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            apiKeyEyeButton.leadingAnchor.constraint(equalTo: fieldWrapper.trailingAnchor),
             apiKeyEyeButton.widthAnchor.constraint(equalToConstant: 22),
             apiKeyEyeButton.heightAnchor.constraint(equalToConstant: 22),
+            apiKeyEyeButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
         ])
         updateApiKeyEyeIcon()
 
@@ -365,15 +386,13 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         isApiKeyVisible.toggle()
 
         if isApiKeyVisible {
-            // 切换到明码：把真实值从 real field 同步到 secure field（反向不需要）
-            // 隐藏 secure field，显示 real field
+            // 显示明文
+            apiKeyRealField.stringValue = apiKeySecureField.stringValue
             apiKeySecureField.isHidden = true
             apiKeyRealField.isHidden = false
-            apiKeyRealField.stringValue = apiKeySecureField.stringValue
-            // 让 real field 成为第一响应者
             window?.makeFirstResponder(apiKeyRealField)
         } else {
-            // 切换到保密：把真实值同步到 secure field，显示 secure field
+            // 隐藏为圆点
             apiKeySecureField.stringValue = apiKeyRealField.stringValue
             apiKeyRealField.isHidden = true
             apiKeySecureField.isHidden = false
@@ -387,6 +406,54 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let symbolName = isApiKeyVisible ? "eye.slash" : "eye"
         let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .regular)
         apiKeyEyeButton.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(config)
+    }
+
+    private func modelFieldRow() -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 10
+        row.widthAnchor.constraint(equalToConstant: 404).isActive = true
+
+        let titleLabel = label("模型", font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
+        titleLabel.widthAnchor.constraint(equalToConstant: 38).isActive = true
+
+        // 外层容器 356×28
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.widthAnchor.constraint(equalToConstant: 356).isActive = true
+        container.heightAnchor.constraint(equalToConstant: 28).isActive = true
+
+        // 文本框 334，箭头在右侧 22
+        modelField.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(modelField)
+        NSLayoutConstraint.activate([
+            modelField.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            modelField.widthAnchor.constraint(equalToConstant: 334),
+            modelField.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            modelField.heightAnchor.constraint(equalToConstant: 28),
+        ])
+
+        // 下拉箭头
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .regular)
+        modelArrowButton.bezelStyle = .inline
+        modelArrowButton.isBordered = false
+        modelArrowButton.imagePosition = .imageOnly
+        modelArrowButton.image = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: nil)?.withSymbolConfiguration(config)
+        modelArrowButton.target = self
+        modelArrowButton.action = #selector(modelArrowClicked)
+        modelArrowButton.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(modelArrowButton)
+        NSLayoutConstraint.activate([
+            modelArrowButton.leadingAnchor.constraint(equalTo: modelField.trailingAnchor),
+            modelArrowButton.widthAnchor.constraint(equalToConstant: 22),
+            modelArrowButton.heightAnchor.constraint(equalToConstant: 22),
+            modelArrowButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+
+        row.addArrangedSubview(titleLabel)
+        row.addArrangedSubview(container)
+        return row
     }
 
     private func fieldRow(_ title: String, field: NSTextField) -> NSView {
@@ -432,6 +499,13 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         apiKeySecureField.stringValue = settings.apiKey
         modelField.stringValue = settings.model
         launchAtLoginCheckbox?.state = launchAtLoginEnabled ? .on : .off
+
+        // 启动时自动验证连接
+        connectionState = settings.isLLMConfigured ? .testing : .notConfigured
+        refreshStatus()
+        if settings.isLLMConfigured {
+            scheduleConnectionTest()
+        }
     }
 
     private func refreshStatus() {
@@ -443,13 +517,19 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
             permissionStatusLabel?.textColor = .systemOrange
         }
 
-        let settings = currentDraftSettings()
-        if settings.isLLMConfigured {
-            apiStatusLabel?.stringValue = "● 可用"
-            apiStatusLabel?.textColor = .systemGreen
-        } else {
+        switch connectionState {
+        case .notConfigured:
             apiStatusLabel?.stringValue = "● 未配置"
             apiStatusLabel?.textColor = .secondaryLabelColor
+        case .testing:
+            apiStatusLabel?.stringValue = "● 测试中…"
+            apiStatusLabel?.textColor = .secondaryLabelColor
+        case .available:
+            apiStatusLabel?.stringValue = "● 可用"
+            apiStatusLabel?.textColor = .systemGreen
+        case .unavailable:
+            apiStatusLabel?.stringValue = "● 不可用"
+            apiStatusLabel?.textColor = .systemRed
         }
     }
 
@@ -498,8 +578,155 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     @objc private func clearAPISettingsClicked() {
         pendingSave?.cancel()
         TranslationSettings.resetSavedConfiguration()
+        connectionState = .notConfigured
+        availableModels = []
         loadSettings()
         refreshStatus()
+    }
+
+    // MARK: - 连接测试
+
+    private func scheduleConnectionTest() {
+        let settings = currentDraftSettings()
+        guard settings.isLLMConfigured else {
+            connectionState = .notConfigured
+            refreshStatus()
+            return
+        }
+        connectionState = .testing
+        refreshStatus()
+
+        connectionTestTask?.cancel()
+        connectionTestTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard let self, !Task.isCancelled else { return }
+            await MainActor.run { self.testConnection() }
+        }
+    }
+
+    private func testConnection() {
+        let settings = currentDraftSettings()
+        guard settings.isLLMConfigured else {
+            connectionState = .notConfigured
+            refreshStatus()
+            return
+        }
+
+        connectionState = .testing
+        refreshStatus()
+
+        let endpoint = settings.apiEndpoint
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(endpoint)/models") else {
+            connectionState = .unavailable
+            refreshStatus()
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 8
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let (_, response) = try await URLSession.shared.data(for: request)
+                await MainActor.run {
+                    if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
+                        self.connectionState = .available
+                    } else {
+                        self.connectionState = .unavailable
+                    }
+                    self.refreshStatus()
+                }
+            } catch {
+                await MainActor.run {
+                    self.connectionState = .unavailable
+                    self.refreshStatus()
+                }
+            }
+        }
+    }
+
+    // MARK: - 模型列表
+
+    @objc private func modelArrowClicked() {
+        if availableModels.isEmpty {
+            fetchModels()
+        } else {
+            showModelPicker()
+        }
+    }
+
+    private func fetchModels() {
+        let settings = currentDraftSettings()
+        guard settings.isLLMConfigured else { return }
+
+        modelArrowButton.isEnabled = false
+
+        let endpoint = settings.apiEndpoint
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(endpoint)/models") else {
+            modelArrowButton.isEnabled = true
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 8
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let (data, _) = try await URLSession.shared.data(for: request)
+                let response = try JSONDecoder().decode(ModelListResponse.self, from: data)
+                await MainActor.run {
+                    self.availableModels = response.data.map { $0.id }.sorted()
+                    self.modelArrowButton.isEnabled = true
+                    self.showModelPicker()
+                }
+            } catch {
+                await MainActor.run {
+                    self.modelArrowButton.isEnabled = true
+                }
+            }
+        }
+    }
+
+    private func showModelPicker() {
+        let menu = NSMenu()
+        for model in availableModels {
+            let item = NSMenuItem(title: model, action: #selector(modelSelected(_:)), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
+        if !availableModels.isEmpty {
+            menu.addItem(.separator())
+        }
+        menu.addItem(NSMenuItem(title: "刷新列表", action: #selector(modelRefreshClicked), keyEquivalent: ""))
+        let buttonFrame = modelArrowButton.convert(modelArrowButton.bounds, to: nil)
+        let screenRect = window?.convertToScreen(buttonFrame) ?? .zero
+        menu.popUp(positioning: nil, at: NSPoint(x: screenRect.minX, y: screenRect.minY), in: nil)
+    }
+
+    @objc private func modelSelected(_ sender: NSMenuItem) {
+        modelField.stringValue = sender.title
+        saveSettingsSoon()
+    }
+
+    @objc private func modelRefreshClicked() {
+        fetchModels()
+    }
+
+    private struct ModelListResponse: Decodable {
+        let data: [ModelEntry]
+        struct ModelEntry: Decodable {
+            let id: String
+        }
     }
 
     @objc private func settingsDidChange() {
@@ -513,15 +740,21 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     func controlTextDidChange(_ obj: Notification) {
-        // 双向同步 Key 的两个 field
         if let field = obj.object as? NSTextField {
             if field === apiKeyRealField {
                 apiKeySecureField.stringValue = apiKeyRealField.stringValue
             } else if field === apiKeySecureField {
                 apiKeyRealField.stringValue = apiKeySecureField.stringValue
             }
+
+            // API 字段变动 → 重置状态并排期重新验证
+            if field === apiEndpointField || field === apiKeyRealField || field === apiKeySecureField {
+                connectionState = .notConfigured
+                availableModels = []
+                refreshStatus()
+                scheduleConnectionTest()
+            }
         }
-        refreshStatus()
         saveSettingsSoon()
     }
 
