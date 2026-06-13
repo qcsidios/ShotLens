@@ -305,8 +305,8 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         row.spacing = 10
         row.widthAnchor.constraint(equalToConstant: 404).isActive = true
 
-        let titleLabel = label("API Key", font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
-        titleLabel.widthAnchor.constraint(equalToConstant: 52).isActive = true
+        let titleLabel = label("Key", font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
+        titleLabel.widthAnchor.constraint(equalToConstant: 38).isActive = true
 
         // 配置两个 Key 字段：字体、代理、样式、禁止换行
         func setupKeyField(_ field: NSTextField) {
