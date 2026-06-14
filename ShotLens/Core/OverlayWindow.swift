@@ -654,15 +654,15 @@ final class OverlayContentView: NSView {
             }
             return lhs.minX < rhs.minX
         }
-        let blockRects = sortedBlocks.map { $0.original.boundingBox.scaledDown(by: displayScale) }
-        let consistentFontSize = consistentFontSize(for: blockRects)
+        let typography = stableTypography(for: sortedBlocks)
 
         for block in sortedBlocks {
             let rect = block.original.boundingBox.scaledDown(by: displayScale)
             let layout = textLayout(
                 for: block.translatedText,
                 baseRect: rect,
-                consistentFontSize: consistentFontSize
+                sourceStyle: block.original.visualStyle,
+                typography: typography
             )
 
             NSColor.white.withAlphaComponent(0.97).setFill()
@@ -680,35 +680,73 @@ final class OverlayContentView: NSView {
         }
     }
 
-    private func textLayout(for text: String, baseRect: CGRect, consistentFontSize: CGFloat) -> TextRenderLayout {
+    private func textLayout(
+        for text: String,
+        baseRect: CGRect,
+        sourceStyle: TextBlockVisualStyle,
+        typography: StableTypography
+    ) -> TextRenderLayout {
         let display = isDisplayBlock(baseRect)
-        let maxSize = display
-            ? min(max(28, baseRect.height * 0.52), 82)
-            : min(consistentFontSize, min(max(12, baseRect.height * 0.72), 24))
-        let coverRect = containedRenderRect(for: baseRect)
+        let sourceFontSize = sourceStyle.estimatedFontSize > 0
+            ? sourceStyle.estimatedFontSize / max(displayScale, 1)
+            : baseRect.height * 0.72
+        let targetSize = display
+            ? min(max(16, typography.displayFontSize), 28)
+            : min(max(12, min(sourceFontSize, typography.bodyFontSize)), 21)
+        let sampleFont = preferredFont(size: targetSize, display: display)
+        let singleLineWidth = (text as NSString).size(withAttributes: [.font: sampleFont]).width
+        let minimumWidth = min(
+            bounds.width - 16,
+            max(baseRect.width, min(singleLineWidth + targetSize * 0.9, bounds.width * (display ? 0.46 : 0.72)))
+        )
+        let minimumHeight = max(baseRect.height, targetSize * 1.55)
+        let coverRect = containedRenderRect(
+            for: baseRect,
+            minimumSize: CGSize(width: minimumWidth, height: minimumHeight)
+        )
         let inset = textInset(for: coverRect)
         let verticalInset = min(max(1, inset * 0.7), max(0, coverRect.height * 0.22))
         let horizontalInset = min(inset, max(0, coverRect.width * 0.14))
         let textRect = coverRect.insetBy(dx: horizontalInset, dy: verticalInset).integral
-        let font = fontThatFits(text: text, in: textRect, maxSize: maxSize, display: display)
+        let font = fontThatFits(text: text, in: textRect, targetSize: targetSize, display: display)
         return TextRenderLayout(coverRect: coverRect, textRect: textRect, font: font)
     }
 
-    private func consistentFontSize(for rects: [CGRect]) -> CGFloat {
-        let ordinaryHeights = rects
-            .filter { !isDisplayBlock($0) }
-            .map(\.height)
+    private func stableTypography(for blocks: [TranslatedBlock]) -> StableTypography {
+        let bodySizes = blocks
+            .filter { !isDisplayBlock($0.original.boundingBox.scaledDown(by: displayScale)) }
+            .map { estimatedSourceFontSize(for: $0.original) }
             .sorted()
-        guard !ordinaryHeights.isEmpty else { return 16 }
-        let medianHeight = ordinaryHeights[ordinaryHeights.count / 2]
-        return min(max(12, medianHeight * 0.72), 22)
+        let displaySizes = blocks
+            .filter { isDisplayBlock($0.original.boundingBox.scaledDown(by: displayScale)) }
+            .map { estimatedSourceFontSize(for: $0.original) }
+            .sorted()
+        let body = bodySizes.isEmpty ? 16 : bodySizes[bodySizes.count / 2]
+        let display = displaySizes.isEmpty ? max(body, 20) : displaySizes[displaySizes.count / 2]
+        return StableTypography(
+            bodyFontSize: min(max(13, body), 20),
+            displayFontSize: min(max(18, display), 26)
+        )
     }
 
-    private func containedRenderRect(for baseRect: CGRect) -> CGRect {
-        let minX = max(bounds.minX, floor(baseRect.minX))
-        let minY = max(bounds.minY, floor(baseRect.minY))
-        let maxX = min(bounds.maxX, ceil(baseRect.maxX))
-        let maxY = min(bounds.maxY, ceil(baseRect.maxY))
+    private func estimatedSourceFontSize(for block: TextBlock) -> CGFloat {
+        if block.visualStyle.estimatedFontSize > 0 {
+            return block.visualStyle.estimatedFontSize / max(displayScale, 1)
+        }
+        return block.boundingBox.scaledDown(by: displayScale).height * 0.72
+    }
+
+    private func containedRenderRect(for baseRect: CGRect, minimumSize: CGSize) -> CGRect {
+        let width = min(bounds.width, max(baseRect.width, minimumSize.width))
+        let height = min(bounds.height, max(baseRect.height, minimumSize.height))
+        let center = CGPoint(x: baseRect.midX, y: baseRect.midY)
+        let originX = min(max(bounds.minX, center.x - width / 2), bounds.maxX - width)
+        let originY = min(max(bounds.minY, center.y - height / 2), bounds.maxY - height)
+        let expanded = CGRect(x: originX, y: originY, width: width, height: height)
+        let minX = max(bounds.minX, floor(expanded.minX))
+        let minY = max(bounds.minY, floor(expanded.minY))
+        let maxX = min(bounds.maxX, ceil(expanded.maxX))
+        let maxY = min(bounds.maxY, ceil(expanded.maxY))
         return CGRect(
             x: minX,
             y: minY,
@@ -717,12 +755,18 @@ final class OverlayContentView: NSView {
         )
     }
 
-    private func fontThatFits(text: String, in textRect: CGRect, maxSize: CGFloat, display: Bool) -> NSFont {
+    private func fontThatFits(text: String, in textRect: CGRect, targetSize: CGFloat, display: Bool) -> NSFont {
         let width = max(1, textRect.width)
         let height = max(1, textRect.height)
-        var low: CGFloat = 1
-        var high = max(maxSize, low)
-        var best = low
+        let minimumSize: CGFloat = display ? 12 : 10
+        var low = minimumSize
+        var high = max(targetSize, low)
+        var best = min(targetSize, high)
+
+        let targetFont = preferredFont(size: targetSize, display: display)
+        if text.boundingSize(font: targetFont, width: width).height <= height + 0.5 {
+            return targetFont
+        }
 
         while high - low > 0.15 {
             let size = (low + high) / 2
@@ -777,6 +821,11 @@ private struct TextRenderLayout {
     let coverRect: CGRect
     let textRect: CGRect
     let font: NSFont
+}
+
+private struct StableTypography {
+    let bodyFontSize: CGFloat
+    let displayFontSize: CGFloat
 }
 
 private extension String {

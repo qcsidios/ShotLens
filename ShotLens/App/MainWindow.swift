@@ -167,14 +167,14 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
         row.addArrangedSubview(label("版本 \(displayVersion)", font: .systemFont(ofSize: 13), color: .secondaryLabelColor))
 
-        checkUpdateButton.title = "测试新版"
+        checkUpdateButton.title = "检测新版本"
         checkUpdateButton.bezelStyle = .inline
         checkUpdateButton.isBordered = true
         checkUpdateButton.toolTip = "检查新版本"
         checkUpdateButton.target = self
         checkUpdateButton.action = #selector(checkForUpdatesClicked)
         checkUpdateButton.translatesAutoresizingMaskIntoConstraints = false
-        checkUpdateButton.widthAnchor.constraint(equalToConstant: 72).isActive = true
+        checkUpdateButton.widthAnchor.constraint(equalToConstant: 88).isActive = true
         checkUpdateButton.heightAnchor.constraint(equalToConstant: 22).isActive = true
         row.addArrangedSubview(checkUpdateButton)
 
@@ -730,7 +730,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         availableUpdate = nil
         installUpdateButton.isHidden = true
         checkUpdateButton.isEnabled = false
-        checkUpdateButton.title = "测试中…"
+        checkUpdateButton.title = "检测中…"
         updateStatusLabel?.stringValue = "检查中…"
         updateStatusLabel?.textColor = .secondaryLabelColor
 
@@ -745,7 +745,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     private func applyUpdateCheckResult(_ result: AppUpdateCheckResult) {
         checkUpdateButton.isEnabled = true
-        checkUpdateButton.title = "测试新版"
+        checkUpdateButton.title = "检测新版本"
         switch result {
         case .available(let update):
             availableUpdate = update
@@ -798,7 +798,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private func showUpdateInstallFailure() {
         checkUpdateButton.isEnabled = true
         installUpdateButton.isEnabled = true
-        checkUpdateButton.title = "测试新版"
+        checkUpdateButton.title = "检测新版本"
         updateStatusLabel?.stringValue = "升级失败，请使用发布文档"
         updateStatusLabel?.textColor = .systemRed
     }

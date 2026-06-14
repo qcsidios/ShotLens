@@ -9,8 +9,8 @@ rg -n 'apiDetailsContainer' "$MAIN_WINDOW" >/dev/null
 rg -n 'isApiDetailsExpanded = UserDefaults.standard.bool' "$MAIN_WINDOW" >/dev/null
 rg -n 'toggleAPIExpandedClicked' "$MAIN_WINDOW" >/dev/null
 rg -n 'updateWindowHeight' "$MAIN_WINDOW" >/dev/null
-rg -n 'checkUpdateButton.title = "测试新版"' "$MAIN_WINDOW" >/dev/null
-rg -n 'checkUpdateButton.title = "测试中…"' "$MAIN_WINDOW" >/dev/null
+rg -n 'checkUpdateButton.title = "检测新版本"' "$MAIN_WINDOW" >/dev/null
+rg -n 'checkUpdateButton.title = "检测中…"' "$MAIN_WINDOW" >/dev/null
 rg -n 'flushPendingSave\(\)' "$MAIN_WINDOW" >/dev/null
 rg -n 'syncAPIKeyDraftFromField' "$MAIN_WINDOW" >/dev/null
 rg -n 'NSButton\(title: "清空"' "$MAIN_WINDOW" >/dev/null

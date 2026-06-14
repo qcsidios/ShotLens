@@ -56,6 +56,13 @@ struct TranslationEndpointSmoke {
         try await assertTranslates(
             endpoint: "https://shotlens-test.local/v1",
             expectedPath: "/v1/chat/completions",
+            assistantContent: #"[ "{\"编码索引\"; \"Coding Index\"}", "代理指数" ]"#,
+            input: ["Coding Index", "Agentic Index"],
+            expected: ["编码索引", "代理指数"]
+        )
+        try await assertTranslates(
+            endpoint: "https://shotlens-test.local/v1",
+            expectedPath: "/v1/chat/completions",
             assistantContent: "你好\n世界"
         )
         try await assertSingleBlockPlainTextParses()
@@ -64,6 +71,7 @@ struct TranslationEndpointSmoke {
         try await assertSingleItemFallbackRecoversWhenRepairFails()
         try await assertSingleItemFallbackUsesBestEffortWithoutRepair()
         try await assertEmptySavedSettingsUseDefaultAPI()
+        try await assertCustomSavedSettingsSurviveLoad()
         try await assertClearSavedSettingsDisableDefaultAPI()
         try await assertConnectionCheckUsesChatCompletions()
         try await assertConnectionCheckAcceptsPlainTextMicroTranslation()
@@ -77,7 +85,9 @@ struct TranslationEndpointSmoke {
     private static func assertTranslates(
         endpoint: String,
         expectedPath: String,
-        assistantContent: String = "0\t你好\n1\t世界"
+        assistantContent: String = "0\t你好\n1\t世界",
+        input: [String] = ["Hello", "World"],
+        expected: [String] = ["你好", "世界"]
     ) async throws {
         MockOpenAIProtocol.reset()
         MockOpenAIProtocol.assistantContent = assistantContent
@@ -88,8 +98,8 @@ struct TranslationEndpointSmoke {
             model: "test-model"
         ))
 
-        let result = try await translator.translate(["Hello", "World"], from: "en", to: "zh-Hans")
-        guard result == ["你好", "世界"] else {
+        let result = try await translator.translate(input, from: "en", to: "zh-Hans")
+        guard result == expected else {
             throw TestFailure("Unexpected translations for \(endpoint): \(result)")
         }
 
@@ -140,6 +150,38 @@ struct TranslationEndpointSmoke {
         let firstBody = MockOpenAIProtocol.requestBodies.first ?? ""
         guard firstBody.contains("Hunyuan-MT-7B") else {
             throw TestFailure("Expected translator payload to include default model, got: \(firstBody)")
+        }
+    }
+
+    private static func assertCustomSavedSettingsSurviveLoad() async throws {
+        let defaults = UserDefaults.standard
+        let originalEndpoint = defaults.object(forKey: TranslationSettings.apiEndpointKey)
+        let originalKey = defaults.object(forKey: TranslationSettings.apiKeyKey)
+        let originalModel = defaults.object(forKey: TranslationSettings.modelKey)
+        let originalFallback = defaults.object(forKey: TranslationSettings.defaultFallbackEnabledKey)
+        defer {
+            restore(originalEndpoint, forKey: TranslationSettings.apiEndpointKey)
+            restore(originalKey, forKey: TranslationSettings.apiKeyKey)
+            restore(originalModel, forKey: TranslationSettings.modelKey)
+            restore(originalFallback, forKey: TranslationSettings.defaultFallbackEnabledKey)
+        }
+
+        TranslationSettings(
+            apiEndpoint: "https://custom.example/v1",
+            apiKey: "custom-key",
+            model: "custom-model",
+            defaultFallbackEnabled: false
+        ).save()
+
+        let loaded = TranslationSettings.load()
+        guard loaded.apiEndpoint == "https://custom.example/v1",
+              loaded.apiKey == "custom-key",
+              loaded.model == "custom-model",
+              loaded.effectiveAPIEndpoint == "https://custom.example/v1",
+              loaded.effectiveAPIKey == "custom-key",
+              loaded.effectiveModel == "custom-model",
+              !loaded.usesDefaultAPIKey else {
+            throw TestFailure("Expected custom API settings to survive load, got \(loaded)")
         }
     }
 

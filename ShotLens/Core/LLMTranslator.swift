@@ -458,6 +458,7 @@ private extension String {
 
     var cleanedTranslationText: String {
         var text = trimmingCharacters(in: .whitespacesAndNewlines)
+        text = text.bestQuotedCJKSegment ?? text
         let prefixes = [
             #"(?i)^here\s+is\s+the\s+translation\s*[:：]\s*"#,
             #"(?i)^translation\s*[:：]\s*"#,
@@ -470,6 +471,23 @@ private extension String {
         }
         return text
             .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'“”‘’")))
+    }
+
+    private var bestQuotedCJKSegment: String? {
+        let text = trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.contains("{") || text.contains("[") || text.contains("\"") || text.contains("“") else {
+            return nil
+        }
+        let pattern = #"[\"“”']([^\"“”']*[一-龥][^\"“”']*)[\"“”']"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let nsText = text as NSString
+        let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
+        return matches
+            .compactMap { match -> String? in
+                guard match.numberOfRanges > 1 else { return nil }
+                return nsText.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            .first { !$0.isEmpty }
     }
 
     var strippingBulletPrefix: String {
