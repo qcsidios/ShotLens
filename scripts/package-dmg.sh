@@ -14,6 +14,12 @@ if [[ ! "$APP_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
+if [[ -z "$CODESIGN_IDENTITY" ]]; then
+  echo "SHOTLENS_CODESIGN_IDENTITY is required for release packaging." >&2
+  echo "Use a stable Apple Developer ID Application certificate so macOS privacy permissions survive updates." >&2
+  exit 1
+fi
+
 rm -rf "$BUILD_DIR"
 mkdir -p "$STAGING_DIR"
 
@@ -21,7 +27,7 @@ SHOTLENS_APP_VERSION="$APP_VERSION" SHOTLENS_DEPLOY_DIR="$STAGING_DIR" SHOTLENS_
 ln -s /Applications "$STAGING_DIR/Applications"
 
 APP_PATH="$STAGING_DIR/$APP_NAME.app"
-codesign --verify --deep --strict --verbose=2 "$APP_PATH" >/dev/null
+"$ROOT_DIR/scripts/check-release-signature.sh" "$APP_PATH"
 "$ROOT_DIR/scripts/check-dmg-layout.sh" "$STAGING_DIR"
 
 rm -f "$DMG_PATH"
