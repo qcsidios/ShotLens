@@ -9,8 +9,8 @@ STAGING_DIR="$BUILD_DIR/dmg-staging"
 DMG_PATH="$BUILD_DIR/ShotLens-$APP_VERSION.dmg"
 CODESIGN_IDENTITY="${SHOTLENS_CODESIGN_IDENTITY:-}"
 
-if [[ ! "$APP_VERSION" =~ ^v[0-9]+(\.[0-9]+){1,2}$ ]]; then
-  echo "Release version must look like v1.1 or v1.1.0, got: $APP_VERSION" >&2
+if [[ ! "$APP_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Release version must use three-part semver like v1.1.0, got: $APP_VERSION" >&2
   exit 1
 fi
 

@@ -73,7 +73,7 @@ bash scripts/build-local.sh
 bash scripts/package-dmg.sh
 ```
 
-脚本会基于已有 `v*` tag 自动计算下一个版本。例如当前最新 tag 为 `v1.1` 时，会输出 `build/release/ShotLens-v1.2.dmg`。如果要指定版本，可设置 `SHOTLENS_APP_VERSION=v1.2`。DMG 顶层只包含 `ShotLens.app` 和应用程序文件夹快捷方式。
+脚本会基于已有三段式 `v*` tag 自动计算下一个版本。例如当前最新 tag 为 `v1.1.0` 时，会输出 `build/release/ShotLens-v1.2.0.dmg`。如果要指定版本，可设置 `SHOTLENS_APP_VERSION=v1.2.0`。DMG 顶层只包含 `ShotLens.app` 和应用程序文件夹快捷方式。
 
 ## 验证
 
@@ -100,20 +100,12 @@ bash scripts/check-dmg-layout.sh
 命令行方式：
 
 ```bash
-VERSION="$(bash scripts/next-release-version.sh)"
-SHOTLENS_APP_VERSION="$VERSION" bash scripts/package-dmg.sh
-git tag "$VERSION"
-git push origin "$VERSION"
-gh release create "$VERSION" "build/release/ShotLens-$VERSION.dmg" \
-  --title "ShotLens $VERSION" \
-  --notes "ShotLens $VERSION 发布版本。"
-```
-
-也可以在已提交、干净的工作区里一键创建 GitHub 发行版：
-
-```bash
 bash scripts/release-github.sh
 ```
+
+发布版本号必须使用三段式，例如 `v0.7.0`。
+
+也可以手动创建 GitHub 发行版，但请使用 `scripts/next-release-version.sh` 输出的三段式 tag，并上传 `build/release/ShotLens-$VERSION.dmg`。
 
 网页方式：打开 GitHub 仓库页面，进入发行版页面，新建发行版，创建或选择 `scripts/next-release-version.sh` 输出的 tag，填写标题和中文说明，上传 `build/release/ShotLens-$VERSION.dmg`，最后发布。
 
