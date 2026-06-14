@@ -693,17 +693,7 @@ final class OverlayContentView: NSView {
         let targetSize = display
             ? min(max(16, typography.displayFontSize), 28)
             : min(max(12, min(sourceFontSize, typography.bodyFontSize)), 21)
-        let sampleFont = preferredFont(size: targetSize, display: display)
-        let singleLineWidth = (text as NSString).size(withAttributes: [.font: sampleFont]).width
-        let minimumWidth = min(
-            bounds.width - 16,
-            max(baseRect.width, min(singleLineWidth + targetSize * 0.9, bounds.width * (display ? 0.46 : 0.72)))
-        )
-        let minimumHeight = max(baseRect.height, targetSize * 1.55)
-        let coverRect = containedRenderRect(
-            for: baseRect,
-            minimumSize: CGSize(width: minimumWidth, height: minimumHeight)
-        )
+        let coverRect = containedRenderRect(for: baseRect)
         let inset = textInset(for: coverRect)
         let verticalInset = min(max(1, inset * 0.7), max(0, coverRect.height * 0.22))
         let horizontalInset = min(inset, max(0, coverRect.width * 0.14))
@@ -736,17 +726,11 @@ final class OverlayContentView: NSView {
         return block.boundingBox.scaledDown(by: displayScale).height * 0.72
     }
 
-    private func containedRenderRect(for baseRect: CGRect, minimumSize: CGSize) -> CGRect {
-        let width = min(bounds.width, max(baseRect.width, minimumSize.width))
-        let height = min(bounds.height, max(baseRect.height, minimumSize.height))
-        let center = CGPoint(x: baseRect.midX, y: baseRect.midY)
-        let originX = min(max(bounds.minX, center.x - width / 2), bounds.maxX - width)
-        let originY = min(max(bounds.minY, center.y - height / 2), bounds.maxY - height)
-        let expanded = CGRect(x: originX, y: originY, width: width, height: height)
-        let minX = max(bounds.minX, floor(expanded.minX))
-        let minY = max(bounds.minY, floor(expanded.minY))
-        let maxX = min(bounds.maxX, ceil(expanded.maxX))
-        let maxY = min(bounds.maxY, ceil(expanded.maxY))
+    private func containedRenderRect(for baseRect: CGRect) -> CGRect {
+        let minX = max(bounds.minX, floor(baseRect.minX))
+        let minY = max(bounds.minY, floor(baseRect.minY))
+        let maxX = min(bounds.maxX, ceil(baseRect.maxX))
+        let maxY = min(bounds.maxY, ceil(baseRect.maxY))
         return CGRect(
             x: minX,
             y: minY,
@@ -761,7 +745,7 @@ final class OverlayContentView: NSView {
         let minimumSize: CGFloat = display ? 12 : 10
         var low = minimumSize
         var high = max(targetSize, low)
-        var best = min(targetSize, high)
+        var best = minimumSize
 
         let targetFont = preferredFont(size: targetSize, display: display)
         if text.boundingSize(font: targetFont, width: width).height <= height + 0.5 {

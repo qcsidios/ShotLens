@@ -498,6 +498,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private static func releaseNotesText(for version: String) -> String {
         switch version {
+        case "0.8.5":
+            return [
+                "• 译文严格按 OCR 原位置呈现，避免跨区域重叠。",
+                "• 修复译文偶发忽大忽小和溢出的问题。",
+                "• 拦截“被拒绝”“高风险”等模型误答，提升翻译可靠性。",
+                "• 继续保留用户自定义 API 设置，升级不会清空。"
+            ].joined(separator: "\n")
         case "0.8.3":
             return [
                 "• 新版本检测改为文字按钮，界面更稳定。",

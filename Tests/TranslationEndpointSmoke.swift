@@ -68,6 +68,7 @@ struct TranslationEndpointSmoke {
         try await assertSingleBlockPlainTextParses()
         try await assertSingleBlockExplanationParses()
         try await assertRepairRequestFixesInvalidBatchResponse()
+        try await assertPolicyLikeBatchOutputIsRepaired()
         try await assertSingleItemFallbackRecoversWhenRepairFails()
         try await assertSingleItemFallbackUsesBestEffortWithoutRepair()
         try await assertEmptySavedSettingsUseDefaultAPI()
@@ -361,6 +362,33 @@ struct TranslationEndpointSmoke {
         guard MockOpenAIProtocol.requestBodies.count == 2,
               MockOpenAIProtocol.requestBodies[1].contains("Convert this model output") else {
             throw TestFailure("Expected second request to be a format repair request")
+        }
+    }
+
+    private static func assertPolicyLikeBatchOutputIsRepaired() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContentQueue = [
+            #"["被拒绝","是高风险"]"#,
+            #"["个性化模型推荐器","探索智能体"]"#
+        ]
+
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+
+        let result = try await translator.translate(
+            ["Personalized model recommender", "Explore agents"],
+            from: "en",
+            to: "zh-Hans"
+        )
+        guard result == ["个性化模型推荐器", "探索智能体"] else {
+            throw TestFailure("Expected policy-like mistranslation to be repaired, got \(result)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 2,
+              MockOpenAIProtocol.requestBodies[1].contains("Convert this model output") else {
+            throw TestFailure("Expected suspicious batch output to trigger a repair request")
         }
     }
 

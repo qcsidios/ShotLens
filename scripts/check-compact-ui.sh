@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 MAIN_WINDOW="$ROOT_DIR/ShotLens/App/MainWindow.swift"
+OVERLAY_WINDOW="$ROOT_DIR/ShotLens/Core/OverlayWindow.swift"
 
 rg -n 'apiDetailsExpandedKey' "$MAIN_WINDOW" >/dev/null
 rg -n 'apiDetailsContainer' "$MAIN_WINDOW" >/dev/null
@@ -27,5 +28,11 @@ if rg -n 'checkUpdateIconView|arrow.clockwise|CABasicAnimation|shotlens.update.s
   echo "Update check should use a text button, not a spinning icon." >&2
   exit 1
 fi
+if rg -n 'minimumWidth|minimumHeight|singleLineWidth|containedRenderRect\(.*minimumSize|minimumSize: CGSize' "$OVERLAY_WINDOW" >/dev/null; then
+  echo "Translation overlay should render inside the original OCR rect without expanding into nearby text." >&2
+  exit 1
+fi
+rg -n 'containedRenderRect\(for: baseRect\)' "$OVERLAY_WINDOW" >/dev/null
+rg -n 'var best = minimumSize' "$OVERLAY_WINDOW" >/dev/null
 
 echo "Compact UI check passed."
