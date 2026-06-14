@@ -36,16 +36,39 @@ struct TranslationEndpointSmoke {
         try await assertTranslates(
             endpoint: "https://shotlens-test.local/v1",
             expectedPath: "/v1/chat/completions",
+            assistantContent: #"{"translations":["你好","世界"]}"#
+        )
+        try await assertTranslates(
+            endpoint: "https://shotlens-test.local/v1",
+            expectedPath: "/v1/chat/completions",
+            assistantContent: #"{"0":"你好","1":"世界"}"#
+        )
+        try await assertTranslates(
+            endpoint: "https://shotlens-test.local/v1",
+            expectedPath: "/v1/chat/completions",
+            assistantContent: #"[{"index":0,"translation":"你好"},{"index":1,"translation":"世界"}]"#
+        )
+        try await assertTranslates(
+            endpoint: "https://shotlens-test.local/v1",
+            expectedPath: "/v1/chat/completions",
+            assistantContent: "```json\n[\"你好\",\"世界\"]\n```"
+        )
+        try await assertTranslates(
+            endpoint: "https://shotlens-test.local/v1",
+            expectedPath: "/v1/chat/completions",
             assistantContent: "你好\n世界"
         )
         try await assertSingleBlockPlainTextParses()
+        try await assertSingleBlockExplanationParses()
         try await assertRepairRequestFixesInvalidBatchResponse()
         try await assertSingleItemFallbackRecoversWhenRepairFails()
         try await assertEmptySavedSettingsUseDefaultAPI()
+        try await assertClearSavedSettingsDisableDefaultAPI()
         try await assertConnectionCheckUsesChatCompletions()
         try await assertConnectionCheckAcceptsPlainTextMicroTranslation()
-        try await assertConnectionCheckAcceptsRepairRecovery()
+        try await assertConnectionCheckAcceptsMalformedTranslationContent()
         try await assertConnectionCheckRejectsHTTPError()
+        try await assertConnectionCheckMarksRateLimitTransient()
 
         print("Translation endpoint smoke test passed.")
     }
@@ -79,15 +102,15 @@ struct TranslationEndpointSmoke {
         let originalEndpoint = defaults.object(forKey: TranslationSettings.apiEndpointKey)
         let originalKey = defaults.object(forKey: TranslationSettings.apiKeyKey)
         let originalModel = defaults.object(forKey: TranslationSettings.modelKey)
+        let originalFallback = defaults.object(forKey: TranslationSettings.defaultFallbackEnabledKey)
         defer {
             restore(originalEndpoint, forKey: TranslationSettings.apiEndpointKey)
             restore(originalKey, forKey: TranslationSettings.apiKeyKey)
             restore(originalModel, forKey: TranslationSettings.modelKey)
+            restore(originalFallback, forKey: TranslationSettings.defaultFallbackEnabledKey)
         }
 
-        defaults.removeObject(forKey: TranslationSettings.apiEndpointKey)
-        defaults.removeObject(forKey: TranslationSettings.apiKeyKey)
-        defaults.removeObject(forKey: TranslationSettings.modelKey)
+        TranslationSettings.resetSavedConfiguration()
 
         let settings = TranslationSettings.load()
         guard settings.apiEndpoint == TranslationSettings.defaultAPIEndpoint else {
@@ -116,6 +139,40 @@ struct TranslationEndpointSmoke {
         let firstBody = MockOpenAIProtocol.requestBodies.first ?? ""
         guard firstBody.contains("Hunyuan-MT-7B") else {
             throw TestFailure("Expected translator payload to include default model, got: \(firstBody)")
+        }
+    }
+
+    private static func assertClearSavedSettingsDisableDefaultAPI() async throws {
+        let defaults = UserDefaults.standard
+        let originalEndpoint = defaults.object(forKey: TranslationSettings.apiEndpointKey)
+        let originalKey = defaults.object(forKey: TranslationSettings.apiKeyKey)
+        let originalModel = defaults.object(forKey: TranslationSettings.modelKey)
+        let originalFallback = defaults.object(forKey: TranslationSettings.defaultFallbackEnabledKey)
+        defer {
+            restore(originalEndpoint, forKey: TranslationSettings.apiEndpointKey)
+            restore(originalKey, forKey: TranslationSettings.apiKeyKey)
+            restore(originalModel, forKey: TranslationSettings.modelKey)
+            restore(originalFallback, forKey: TranslationSettings.defaultFallbackEnabledKey)
+        }
+
+        TranslationSettings.clearSavedConfiguration()
+        let cleared = TranslationSettings.load()
+        guard !cleared.defaultFallbackEnabled,
+              cleared.apiEndpoint.isEmpty,
+              cleared.apiKey.isEmpty,
+              cleared.model.isEmpty,
+              !cleared.isLLMConfigured else {
+            throw TestFailure("Expected clear to disable default fallback, got \(cleared)")
+        }
+
+        TranslationSettings.resetSavedConfiguration()
+        let restored = TranslationSettings.load()
+        guard restored.defaultFallbackEnabled,
+              restored.usesDefaultAPIKey,
+              restored.isLLMConfigured,
+              restored.effectiveAPIEndpoint == TranslationSettings.defaultAPIEndpoint,
+              restored.effectiveModel == TranslationSettings.defaultModel else {
+            throw TestFailure("Expected reset to restore default fallback, got \(restored)")
         }
     }
 
@@ -161,12 +218,9 @@ struct TranslationEndpointSmoke {
         }
     }
 
-    private static func assertConnectionCheckAcceptsRepairRecovery() async throws {
+    private static func assertConnectionCheckAcceptsMalformedTranslationContent() async throws {
         MockOpenAIProtocol.reset()
-        MockOpenAIProtocol.assistantContentQueue = [
-            "Here is the translation: 你好",
-            #"["你好"]"#
-        ]
+        MockOpenAIProtocol.assistantContent = "Here is the translation: 你好"
 
         let checker = LLMConnectionChecker(settings: TranslationSettings(
             apiEndpoint: "https://shotlens-test.local/v1",
@@ -174,13 +228,9 @@ struct TranslationEndpointSmoke {
             model: "test-model"
         ))
 
-        let isAvailable = await checker.isAvailable()
-        guard isAvailable else {
-            throw TestFailure("Expected connection check to pass when repair recovers the micro-translation")
-        }
-        guard MockOpenAIProtocol.requestBodies.count == 2,
-              MockOpenAIProtocol.requestBodies[1].contains("Convert this model output") else {
-            throw TestFailure("Expected connection check to issue a repair request")
+        let result = await checker.checkAvailability()
+        guard result == .available else {
+            throw TestFailure("Expected connection check to accept callable model even when content is not strict JSON, got \(result)")
         }
     }
 
@@ -194,9 +244,25 @@ struct TranslationEndpointSmoke {
             model: "test-model"
         ))
 
-        let isAvailable = await checker.isAvailable()
-        guard !isAvailable else {
-            throw TestFailure("Expected connection check to reject HTTP failures")
+        let result = await checker.checkAvailability()
+        guard result == .unavailable else {
+            throw TestFailure("Expected connection check to reject auth HTTP failures, got \(result)")
+        }
+    }
+
+    private static func assertConnectionCheckMarksRateLimitTransient() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.chatStatusCode = 429
+
+        let checker = LLMConnectionChecker(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+
+        let result = await checker.checkAvailability()
+        guard result == .transientFailure else {
+            throw TestFailure("Expected connection check to treat 429 as transient, got \(result)")
         }
     }
 
@@ -213,6 +279,22 @@ struct TranslationEndpointSmoke {
         let result = try await translator.translate(["Hello"], from: "en", to: "zh-Hans")
         guard result == ["你好"] else {
             throw TestFailure("Expected single plain text response to parse, got \(result)")
+        }
+    }
+
+    private static func assertSingleBlockExplanationParses() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = "Here is the translation: 你好"
+
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+
+        let result = try await translator.translate(["Hello"], from: "en", to: "zh-Hans")
+        guard result == ["你好"] else {
+            throw TestFailure("Expected single explanation response to parse, got \(result)")
         }
     }
 

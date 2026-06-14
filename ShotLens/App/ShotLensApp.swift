@@ -456,8 +456,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             translatedTexts = try await provider.translate(texts, from: sourceLang, to: targetLang)
         } catch {
             ShotLensLogger.log("翻译失败", error: error)
-            let message = error.localizedDescription
-            overlay?.setMessage(message.isEmpty ? "翻译失败" : message)
+            overlay?.setMessage(userFacingTranslationFailureMessage(for: error))
             return
         }
         ShotLensLogger.log(String(format: "翻译完成，使用 %@，输出 %d 个文本块，耗时 %.2fs", provider.name, translatedTexts.count, Date().timeIntervalSince(translationStartedAt)))
@@ -468,6 +467,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         overlay?.setTranslatedBlocks(translatedBlocks)
+    }
+
+    private func userFacingTranslationFailureMessage(for error: Error) -> String {
+        if let translationError = error as? TranslationError {
+            switch translationError {
+            case .invalidLLMResponse, .llmResponseCountMismatch:
+                return "翻译结果不稳定，已自动重试但仍失败，请再试一次。"
+            case .llmHTTPError(let statusCode, _):
+                if statusCode == 401 || statusCode == 403 {
+                    return "API Key 无法使用，请检查 API 设置。"
+                }
+                if statusCode == 429 || statusCode >= 500 {
+                    return "API 暂时繁忙，请稍后重试。"
+                }
+                return "API 请求失败，请检查 API 设置。"
+            case .invalidLLMEndpoint:
+                return "API 地址无效，请检查 API 设置。"
+            case .llmNotConfigured:
+                return "未配置 API，请在控制台设置或恢复默认。"
+            case .missingSourceLanguage:
+                return "未识别到可翻译文字。"
+            }
+        }
+        let message = error.localizedDescription
+        return message.isEmpty ? "翻译失败，请再试一次。" : message
     }
 
     // MARK: - UI 桥接

@@ -3,18 +3,27 @@ import Foundation
 struct LLMTranslator: TranslationProvider {
     let name = "大模型翻译"
     let settings: TranslationSettings
+    private let maxBatchItemCount = 20
+    private let maxBatchCharacterCount = 6000
 
     func translate(_ texts: [String], from sourceLanguage: String, to targetLanguage: String) async throws -> [String] {
-        try await translate(
-            texts,
-            from: sourceLanguage,
-            to: targetLanguage,
-            allowsSingleItemFallback: true
-        )
+        guard !texts.isEmpty else { return [] }
+
+        var translated: [String] = []
+        translated.reserveCapacity(texts.count)
+        for batch in makeBatches(from: texts) {
+            translated.append(contentsOf: try await translateBatch(
+                batch,
+                from: sourceLanguage,
+                to: targetLanguage,
+                allowsSingleItemFallback: true
+            ))
+        }
+        return translated
     }
 
     func validateMicroTranslation(from sourceLanguage: String, to targetLanguage: String) async throws {
-        _ = try await translate(
+        _ = try await translateBatch(
             ["Hello"],
             from: sourceLanguage,
             to: targetLanguage,
@@ -22,7 +31,17 @@ struct LLMTranslator: TranslationProvider {
         )
     }
 
-    private func translate(
+    func validateConnectivity(from sourceLanguage: String, to targetLanguage: String) async throws {
+        let content = try await requestAssistantContent(
+            systemPrompt: "Reply with only a short \(targetLanguage) translation. No Markdown.",
+            userPayload: try makeUserPayload(texts: ["Hello"], sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
+        )
+        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw TranslationError.invalidLLMResponse
+        }
+    }
+
+    private func translateBatch(
         _ texts: [String],
         from sourceLanguage: String,
         to targetLanguage: String,
@@ -40,6 +59,7 @@ struct LLMTranslator: TranslationProvider {
         do {
             return try parseTranslations(from: content, expectedCount: texts.count)
         } catch {
+            ShotLensLogger.log("批量翻译返回格式异常，尝试修复：\(content.logSnippet)")
             let repairedContent = try await requestAssistantContent(
                 systemPrompt: repairSystemPrompt(expectedCount: texts.count),
                 userPayload: makeRepairPayload(
@@ -52,7 +72,8 @@ struct LLMTranslator: TranslationProvider {
             do {
                 return try parseTranslations(from: repairedContent, expectedCount: texts.count)
             } catch {
-                guard allowsSingleItemFallback, texts.count > 1 else {
+                ShotLensLogger.log("翻译格式修复失败，进入逐条兜底：\(repairedContent.logSnippet)")
+                guard allowsSingleItemFallback else {
                     throw error
                 }
                 return try await translateItemsIndividually(
@@ -102,7 +123,7 @@ struct LLMTranslator: TranslationProvider {
     }
 
     private func primarySystemPrompt(targetLanguage: String) -> String {
-        "Translate OCR text blocks to \(targetLanguage). Return only a valid JSON string array. The array length must equal the input block count. Each array item must be the literal translation of the matching block. Do not return Markdown, numbering, explanations, objects, or extra text."
+        "Translate OCR text blocks to \(targetLanguage). Return only a valid JSON string array with exactly one string per input block, in the same order. If a block cannot be translated, return the original text for that item. Do not return Markdown, numbering, explanations, objects, or extra text."
     }
 
     private func repairSystemPrompt(expectedCount: Int) -> String {
@@ -138,7 +159,27 @@ struct LLMTranslator: TranslationProvider {
                 systemPrompt: primarySystemPrompt(targetLanguage: targetLanguage),
                 userPayload: try makeUserPayload(texts: [text], sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
             )
-            translated.append(try parseTranslations(from: content, expectedCount: 1)[0])
+            do {
+                translated.append(try parseTranslations(from: content, expectedCount: 1)[0])
+            } catch {
+                let repairedContent = try await requestAssistantContent(
+                    systemPrompt: repairSystemPrompt(expectedCount: 1),
+                    userPayload: makeRepairPayload(
+                        content: content,
+                        expectedCount: 1,
+                        targetLanguage: targetLanguage
+                    )
+                )
+                do {
+                    translated.append(try parseTranslations(from: repairedContent, expectedCount: 1)[0])
+                } catch {
+                    if let bestEffort = bestEffortSingleTranslation(from: content) {
+                        translated.append(bestEffort)
+                    } else {
+                        throw error
+                    }
+                }
+            }
         }
         return translated
     }
@@ -148,14 +189,16 @@ struct LLMTranslator: TranslationProvider {
               let choices = root["choices"] as? [[String: Any]],
               let first = choices.first,
               let message = first["message"] as? [String: Any],
-              let content = message["content"] as? String else {
+              let content = firstNonEmptyString(in: message, keys: ["content", "reasoning_content"]) else {
             throw TranslationError.invalidLLMResponse
         }
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func parseTranslations(from content: String, expectedCount: Int) throws -> [String] {
-        if let values = parseStringArrayIfPresent(from: content), values.count == expectedCount {
+        guard expectedCount > 0 else { return [] }
+
+        if let values = parseStructuredJSONIfPresent(from: content), values.count == expectedCount {
             return values
         }
         if let lines = parseNumberedLines(from: content, expectedCount: expectedCount) {
@@ -168,6 +211,30 @@ struct LLMTranslator: TranslationProvider {
             return [plainText]
         }
         throw TranslationError.invalidLLMResponse
+    }
+
+    private func makeBatches(from texts: [String]) -> [[String]] {
+        var batches: [[String]] = []
+        var current: [String] = []
+        var currentCharacters = 0
+
+        for text in texts {
+            let count = text.count
+            let wouldExceedCount = current.count >= maxBatchItemCount
+            let wouldExceedCharacters = !current.isEmpty && currentCharacters + count > maxBatchCharacterCount
+            if wouldExceedCount || wouldExceedCharacters {
+                batches.append(current)
+                current = []
+                currentCharacters = 0
+            }
+            current.append(text)
+            currentCharacters += count
+        }
+
+        if !current.isEmpty {
+            batches.append(current)
+        }
+        return batches
     }
 
     private func parseNumberedLines(from content: String, expectedCount: Int) -> [String]? {
@@ -229,36 +296,73 @@ struct LLMTranslator: TranslationProvider {
         return (index, text)
     }
 
-    private func parseStringArrayIfPresent(from content: String) -> [String]? {
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func parseStructuredJSONIfPresent(from content: String) -> [String]? {
+        let trimmed = content.strippingCodeFence.trimmingCharacters(in: .whitespacesAndNewlines)
         let jsonText: String
 
-        if trimmed.hasPrefix("```") {
-            let lines = trimmed.components(separatedBy: .newlines)
-            jsonText = lines
-                .dropFirst()
-                .dropLast(lines.last?.hasPrefix("```") == true ? 1 : 0)
-                .joined(separator: "\n")
-        } else if let start = trimmed.firstIndex(of: "["),
+        if let start = trimmed.firstIndex(of: "["),
                   let end = trimmed.lastIndex(of: "]") {
+            jsonText = String(trimmed[start...end])
+        } else if let start = trimmed.firstIndex(of: "{"),
+                  let end = trimmed.lastIndex(of: "}") {
             jsonText = String(trimmed[start...end])
         } else {
             jsonText = trimmed
         }
 
         guard let data = jsonText.data(using: .utf8),
-              let values = try? JSONSerialization.jsonObject(with: data) as? [String] else {
+              let object = try? JSONSerialization.jsonObject(with: data) else {
             return nil
         }
-        return values
+        return translations(fromJSONObject: object)
+    }
+
+    private func translations(fromJSONObject object: Any) -> [String]? {
+        if let values = object as? [String] {
+            return values.map(\.cleanedTranslationText).filter { !$0.isEmpty }
+        }
+
+        if let array = object as? [Any] {
+            let values = array.compactMap { item -> String? in
+                if let value = item as? String {
+                    return value.cleanedTranslationText
+                }
+                if let dictionary = item as? [String: Any] {
+                    return firstNonEmptyString(in: dictionary, keys: ["translation", "translated", "translatedText", "text", "value"])?.cleanedTranslationText
+                }
+                return nil
+            }
+            return values.count == array.count ? values.filter { !$0.isEmpty } : nil
+        }
+
+        guard let dictionary = object as? [String: Any] else { return nil }
+        for key in ["translations", "translation", "translated", "translatedText", "items", "result", "results", "data"] {
+            if let nested = dictionary[key],
+               let values = translations(fromJSONObject: nested) {
+                return values
+            }
+        }
+
+        let indexedValues = dictionary.compactMap { key, value -> (Int, String)? in
+            guard let index = Int(key) else { return nil }
+            if let text = value as? String {
+                return (index, text.cleanedTranslationText)
+            }
+            if let nested = value as? [String: Any],
+               let text = firstNonEmptyString(in: nested, keys: ["translation", "translated", "translatedText", "text", "value"]) {
+                return (index, text.cleanedTranslationText)
+            }
+            return nil
+        }
+        guard indexedValues.count == dictionary.count, !indexedValues.isEmpty else { return nil }
+        return indexedValues.sorted { $0.0 < $1.0 }.map(\.1).filter { !$0.isEmpty }
     }
 
     private func parseUnnumberedLines(from content: String, expectedCount: Int) -> [String]? {
         let lines = content
-            .replacingOccurrences(of: "```text", with: "")
-            .replacingOccurrences(of: "```", with: "")
+            .strippingCodeFence
             .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .map { $0.strippingBulletPrefix.cleanedTranslationText }
             .filter { !$0.isEmpty }
         guard lines.count == expectedCount else { return nil }
         guard !lines.contains(where: looksLikeExplanation) else { return nil }
@@ -266,16 +370,41 @@ struct LLMTranslator: TranslationProvider {
     }
 
     private func parseSinglePlainText(from content: String) -> String? {
-        let text = content
-            .replacingOccurrences(of: "```text", with: "")
-            .replacingOccurrences(of: "```", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let text = bestEffortSingleTranslation(from: content) else { return nil }
         guard !text.isEmpty,
-              !text.contains("\n"),
               !looksLikeExplanation(text) else {
             return nil
         }
         return text
+    }
+
+    private func bestEffortSingleTranslation(from content: String) -> String? {
+        let cleaned = content.strippingCodeFence.cleanedTranslationText
+        guard !cleaned.isEmpty else { return nil }
+        if !cleaned.contains("\n") {
+            return cleaned
+        }
+
+        let lines = cleaned
+            .components(separatedBy: .newlines)
+            .map { $0.strippingBulletPrefix.cleanedTranslationText }
+            .filter { !$0.isEmpty && !looksLikeExplanation($0) }
+        if lines.count == 1 {
+            return lines[0]
+        }
+        return nil
+    }
+
+    private func firstNonEmptyString(in dictionary: [String: Any], keys: [String]) -> String? {
+        for key in keys {
+            if let value = dictionary[key] as? String {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
+            }
+        }
+        return nil
     }
 
     private func looksLikeExplanation(_ text: String) -> Bool {
@@ -288,6 +417,45 @@ struct LLMTranslator: TranslationProvider {
 }
 
 private extension String {
+    var logSnippet: String {
+        let clean = replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(clean.prefix(240))
+    }
+
+    var strippingCodeFence: String {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("```") else { return trimmed }
+        var lines = trimmed.components(separatedBy: .newlines)
+        if !lines.isEmpty {
+            lines.removeFirst()
+        }
+        if lines.last?.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```") == true {
+            lines.removeLast()
+        }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var cleanedTranslationText: String {
+        var text = trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefixes = [
+            #"(?i)^here\s+is\s+the\s+translation\s*[:：]\s*"#,
+            #"(?i)^translation\s*[:：]\s*"#,
+            #"(?i)^translated\s+text\s*[:：]\s*"#,
+            #"^译文\s*[:：]\s*"#,
+            #"^翻译\s*[:：]\s*"#
+        ]
+        for pattern in prefixes {
+            text = text.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
+        return text
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'“”‘’")))
+    }
+
+    var strippingBulletPrefix: String {
+        replacingOccurrences(of: #"^\s*[-*•]\s+"#, with: "", options: .regularExpression)
+    }
+
     var lineProtocolEscaped: String {
         replacingOccurrences(of: "\t", with: " ")
             .replacingOccurrences(of: "\n", with: " ")

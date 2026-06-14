@@ -9,8 +9,10 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private var permissionStatusLabel: NSTextField?
     private var apiStatusLabel: NSTextField?
     private var updateStatusLabel: NSTextField?
+    private var apiDefaultNoteLabel: NSTextField?
     private var launchAtLoginCheckbox: NSButton?
     private let checkUpdateButton = NSButton()
+    private let checkUpdateIconView = NSImageView()
     private let installUpdateButton = NSButton()
     private let toggleAPIButton = NSButton()
     private var apiDetailsContainer: NSStackView?
@@ -18,6 +20,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private let apiEndpointField = NSTextField()
     private let apiKeyField = NSTextField()
     private var apiKeyValue = ""
+    private var defaultFallbackEnabled = true
     private let apiKeyEyeButton = NSButton()
     private var isApiKeyVisible = false
     private var apiKeyAutoRevealed = false
@@ -30,6 +33,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         case untested
         case testing
         case available
+        case transientFailure
         case unavailable
     }
     private var connectionState: ConnectionState = .untested
@@ -163,19 +167,29 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         row.alignment = .centerY
         row.spacing = 6
 
-        row.addArrangedSubview(label("截图翻译控制台 · 版本 \(displayVersion)", font: .systemFont(ofSize: 13), color: .secondaryLabelColor))
+        row.addArrangedSubview(label("版本 \(displayVersion)", font: .systemFont(ofSize: 13), color: .secondaryLabelColor))
 
         let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .regular)
         checkUpdateButton.bezelStyle = .inline
         checkUpdateButton.isBordered = false
-        checkUpdateButton.imagePosition = .imageOnly
         checkUpdateButton.wantsLayer = true
-        checkUpdateButton.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "检查更新")?.withSymbolConfiguration(config)
         checkUpdateButton.toolTip = "检查新版本"
         checkUpdateButton.target = self
         checkUpdateButton.action = #selector(checkForUpdatesClicked)
+        checkUpdateButton.translatesAutoresizingMaskIntoConstraints = false
         checkUpdateButton.widthAnchor.constraint(equalToConstant: 22).isActive = true
         checkUpdateButton.heightAnchor.constraint(equalToConstant: 22).isActive = true
+        checkUpdateIconView.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "检查更新")?.withSymbolConfiguration(config)
+        checkUpdateIconView.imageScaling = .scaleProportionallyDown
+        checkUpdateIconView.wantsLayer = true
+        checkUpdateIconView.translatesAutoresizingMaskIntoConstraints = false
+        checkUpdateButton.addSubview(checkUpdateIconView)
+        NSLayoutConstraint.activate([
+            checkUpdateIconView.centerXAnchor.constraint(equalTo: checkUpdateButton.centerXAnchor),
+            checkUpdateIconView.centerYAnchor.constraint(equalTo: checkUpdateButton.centerYAnchor),
+            checkUpdateIconView.widthAnchor.constraint(equalToConstant: 16),
+            checkUpdateIconView.heightAnchor.constraint(equalToConstant: 16),
+        ])
         row.addArrangedSubview(checkUpdateButton)
 
         let status = label("", font: .systemFont(ofSize: 12), color: .secondaryLabelColor)
@@ -325,11 +339,15 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let clearButton = NSButton(title: "清空", target: self, action: #selector(clearAPISettingsClicked))
         clearButton.bezelStyle = .rounded
         clearButton.widthAnchor.constraint(equalToConstant: 58).isActive = true
+        let restoreDefaultButton = NSButton(title: "恢复默认", target: self, action: #selector(restoreDefaultAPISettingsClicked))
+        restoreDefaultButton.bezelStyle = .rounded
+        restoreDefaultButton.widthAnchor.constraint(equalToConstant: 82).isActive = true
         let testButton = NSButton(title: "测试", target: self, action: #selector(testConnectionClicked))
         testButton.bezelStyle = .rounded
         testButton.widthAnchor.constraint(equalToConstant: 58).isActive = true
         actionRow.addArrangedSubview(actionSpacer)
         actionRow.addArrangedSubview(clearButton)
+        actionRow.addArrangedSubview(restoreDefaultButton)
         actionRow.addArrangedSubview(testButton)
 
         details.addArrangedSubview(fieldRow("地址", field: apiEndpointField))
@@ -339,6 +357,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
         let note = label("Key 留空时使用默认福利额度；\(TranslationSettings.limitedFreeModelNotice)", font: .systemFont(ofSize: 12), color: .secondaryLabelColor)
         note.lineBreakMode = .byTruncatingTail
+        apiDefaultNoteLabel = note
         details.addArrangedSubview(note)
         card.addArrangedSubview(details)
         return card
@@ -578,6 +597,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let settings = TranslationSettings.load()
         apiEndpointField.stringValue = settings.apiEndpoint
         apiKeyValue = settings.apiKey
+        defaultFallbackEnabled = settings.defaultFallbackEnabled
         isApiKeyVisible = false
         apiKeyAutoRevealed = false
         updateApiKeyDisplay()
@@ -603,11 +623,15 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
         switch connectionState {
         case .notConfigured:
-            apiStatusLabel?.stringValue = "● 默认额度"
+            apiStatusLabel?.stringValue = "● 未配置"
             apiStatusLabel?.textColor = .secondaryLabelColor
         case .untested:
             let settings = currentDraftSettings()
-            apiStatusLabel?.stringValue = settings.usesDefaultAPIKey ? "● 默认额度" : "● 未测试"
+            if !settings.isLLMConfigured {
+                apiStatusLabel?.stringValue = "● 未配置"
+            } else {
+                apiStatusLabel?.stringValue = settings.usesDefaultAPIKey ? "● 默认福利额度" : "● 自定义 API"
+            }
             apiStatusLabel?.textColor = .secondaryLabelColor
         case .testing:
             apiStatusLabel?.stringValue = "● 测试中…"
@@ -615,17 +639,22 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         case .available:
             apiStatusLabel?.stringValue = "● 可用"
             apiStatusLabel?.textColor = .systemGreen
+        case .transientFailure:
+            apiStatusLabel?.stringValue = currentDraftSettings().usesDefaultAPIKey ? "● 默认额度繁忙" : "● 暂时不可用"
+            apiStatusLabel?.textColor = .systemOrange
         case .unavailable:
             apiStatusLabel?.stringValue = "● 不可用"
             apiStatusLabel?.textColor = .systemRed
         }
+        apiDefaultNoteLabel?.isHidden = !currentDraftSettings().usesDefaultAPIKey
     }
 
     func currentDraftSettings() -> TranslationSettings {
         TranslationSettings(
             apiEndpoint: apiEndpointField.stringValue,
             apiKey: apiKeyValue,
-            model: modelField.stringValue
+            model: modelField.stringValue,
+            defaultFallbackEnabled: defaultFallbackEnabled
         )
     }
 
@@ -682,12 +711,21 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     @objc private func clearAPISettingsClicked() {
         pendingSave?.cancel()
-        TranslationSettings.resetSavedConfiguration()
+        TranslationSettings.clearSavedConfiguration()
         connectionState = .untested
         availableModels = []
         apiKeyValue = ""
         isApiKeyVisible = false
         apiKeyAutoRevealed = false
+        loadSettings()
+        refreshStatus()
+    }
+
+    @objc private func restoreDefaultAPISettingsClicked() {
+        pendingSave?.cancel()
+        TranslationSettings.resetSavedConfiguration()
+        connectionState = .untested
+        availableModels = []
         loadSettings()
         refreshStatus()
     }
@@ -779,17 +817,18 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     private func startUpdateButtonRotation() {
-        checkUpdateButton.layer?.removeAnimation(forKey: "shotlens.update.spin")
+        checkUpdateIconView.layer?.removeAnimation(forKey: "shotlens.update.spin")
         let animation = CABasicAnimation(keyPath: "transform.rotation.z")
         animation.fromValue = 0
         animation.toValue = CGFloat.pi * 2
         animation.duration = 0.8
         animation.repeatCount = .infinity
-        checkUpdateButton.layer?.add(animation, forKey: "shotlens.update.spin")
+        checkUpdateIconView.layer?.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        checkUpdateIconView.layer?.add(animation, forKey: "shotlens.update.spin")
     }
 
     private func stopUpdateButtonRotation() {
-        checkUpdateButton.layer?.removeAnimation(forKey: "shotlens.update.spin")
+        checkUpdateIconView.layer?.removeAnimation(forKey: "shotlens.update.spin")
     }
 
     private func markUntested() {
@@ -824,7 +863,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private func testConnection() {
         syncAPIKeyDraftFromField()
         guard canTestConnection else {
-            connectionState = .unavailable
+            connectionState = .notConfigured
             refreshStatus()
             return
         }
@@ -834,10 +873,17 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         connectionTestTask =
         Task { [weak self] in
             guard let self else { return }
-            let available = await LLMConnectionChecker(settings: settings).isAvailable()
+            let result = await LLMConnectionChecker(settings: settings).checkAvailability()
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                self.connectionState = available ? .available : .unavailable
+                switch result {
+                case .available:
+                    self.connectionState = .available
+                case .transientFailure:
+                    self.connectionState = .transientFailure
+                case .unavailable:
+                    self.connectionState = .unavailable
+                }
                 self.refreshStatus()
             }
         }
@@ -925,6 +971,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     @objc private func modelSelected(_ sender: NSMenuItem) {
         modelField.stringValue = sender.title
+        defaultFallbackEnabled = false
         saveSettingsSoon()
     }
 
@@ -956,7 +1003,8 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
                 syncAPIKeyDraftFromField()
             }
 
-            if field === apiEndpointField || field === apiKeyField {
+            if field === apiEndpointField || field === apiKeyField || field === modelField {
+                defaultFallbackEnabled = false
                 markUntested()
             }
         }
