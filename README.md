@@ -70,10 +70,12 @@ bash scripts/build-local.sh
 打包 DMG：
 
 ```bash
-bash scripts/package-dmg.sh
+SHOTLENS_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" bash scripts/package-dmg.sh
 ```
 
 脚本会基于已有三段式 `v*` tag 自动计算下一个版本。例如当前最新 tag 为 `v1.1.0` 时，会输出 `build/release/ShotLens-v1.2.0.dmg`。如果要指定版本，可设置 `SHOTLENS_APP_VERSION=v1.2.0`。DMG 顶层只包含 `ShotLens.app` 和应用程序文件夹快捷方式。
+
+发布包必须使用稳定的 Apple Developer ID Application 证书签名。临时 ad-hoc 签名会让 macOS 在升级后把新版识别成不同应用，导致屏幕录制权限需要重新授权。本地开发构建仍可使用默认 ad-hoc 签名。
 
 ## 验证
 
@@ -95,6 +97,7 @@ bash scripts/check-dmg-layout.sh
 - `check-project-integrity.sh`：检查关键项目文件、OCR 辅助进程、框选辅助进程和 Xcode 引用是否完整。
 - `build-local.sh`：执行本地构建。
 - `check-no-private-config.sh`：检查构建产物里没有泄露本机 API 配置。
+- `check-release-signature.sh`：检查发布版不是 ad-hoc 签名，并带有稳定 TeamIdentifier。
 - `check-dmg-layout.sh`：检查 DMG 目录布局。
 
 ## 创建发行版
@@ -102,10 +105,12 @@ bash scripts/check-dmg-layout.sh
 命令行方式：
 
 ```bash
-bash scripts/release-github.sh
+SHOTLENS_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" bash scripts/release-github.sh
 ```
 
 发布版本号必须使用三段式，例如 `v0.7.0`。
+
+如果要为某个版本准备固定发布说明，可创建 `scripts/release-notes/vX.Y.Z.md`，发布脚本会自动使用它。
 
 也可以手动创建 GitHub 发行版，但请使用 `scripts/next-release-version.sh` 输出的三段式 tag，并上传 `build/release/ShotLens-$VERSION.dmg`。
 
