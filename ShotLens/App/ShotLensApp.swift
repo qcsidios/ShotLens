@@ -498,6 +498,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private static func releaseNotesText(for version: String) -> String {
         switch version {
+        case "0.8.6":
+            return [
+                "• 修复全屏浏览器中截图翻译浮窗可能只在桌面显示的问题。",
+                "• 优化框选层和结果浮窗的全屏 Space 展示行为。",
+                "• 发布版本改为按迭代内容显式指定版本号。"
+            ].joined(separator: "\n")
         case "0.8.5":
             return [
                 "• 译文严格按 OCR 原位置呈现，避免跨区域重叠。",

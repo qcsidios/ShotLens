@@ -76,10 +76,10 @@ bash scripts/build-local.sh
 打包 DMG：
 
 ```bash
-bash scripts/package-dmg.sh
+SHOTLENS_APP_VERSION=v0.8.6 bash scripts/package-dmg.sh
 ```
 
-脚本会基于已有三段式 `v*` tag 自动计算下一个版本。例如当前最新 tag 为 `v1.1.0` 时，会输出 `build/release/ShotLens-v1.2.0.dmg`。如果要指定版本，可设置 `SHOTLENS_APP_VERSION=v1.2.0`。DMG 顶层只包含 `ShotLens.app` 和应用程序文件夹快捷方式。
+发布前请先根据迭代内容选择版本号：破坏性或大版本能力使用 major，新增能力使用 minor，缺陷修复使用 patch。脚本要求显式设置 `SHOTLENS_APP_VERSION`，避免不经判断自动跳版本。DMG 顶层只包含 `ShotLens.app` 和应用程序文件夹快捷方式。
 
 默认打包会跳过 Apple Developer ID 认证和公证，但不会使用 ad-hoc 临时签名。脚本会自动创建或复用本机 `ShotLens Local Signing` 自签名代码签名证书，让 macOS 能在后续升级中识别为同一个 App，减少屏幕录制权限反复丢失。
 
@@ -119,16 +119,16 @@ bash scripts/check-dmg-layout.sh
 命令行方式：
 
 ```bash
-bash scripts/release-github.sh
+SHOTLENS_APP_VERSION=v0.8.6 bash scripts/release-github.sh
 ```
 
-发布版本号必须使用三段式，例如 `v0.7.0`。
+发布版本号必须使用三段式，例如 `v0.8.6`。发布前请先根据迭代内容决定版本号，并显式传入 `SHOTLENS_APP_VERSION`。
 
 如果要为某个版本准备固定发布说明，可创建 `scripts/release-notes/vX.Y.Z.md`，发布脚本会自动使用它。
 
-也可以手动创建 GitHub 发行版，但请使用 `scripts/next-release-version.sh` 输出的三段式 tag，并上传 `build/release/ShotLens-$VERSION.dmg`。
+也可以手动创建 GitHub 发行版，但请使用已经按迭代内容确定的三段式 tag，并上传 `build/release/ShotLens-$VERSION.dmg`。
 
-网页方式：打开 GitHub 仓库页面，进入发行版页面，新建发行版，创建或选择 `scripts/next-release-version.sh` 输出的 tag，填写标题和中文说明，上传 `build/release/ShotLens-$VERSION.dmg`，最后发布。
+网页方式：打开 GitHub 仓库页面，进入发行版页面，新建发行版，创建或选择已经确定的 tag，填写标题和中文说明，上传 `build/release/ShotLens-$VERSION.dmg`，最后发布。
 
 ## 隐私说明
 

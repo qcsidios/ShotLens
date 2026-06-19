@@ -3,11 +3,17 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="ShotLens"
-APP_VERSION="${SHOTLENS_APP_VERSION:-$("$ROOT_DIR/scripts/next-release-version.sh")}"
 BUILD_DIR="$ROOT_DIR/build/release"
 STAGING_DIR="$BUILD_DIR/dmg-staging"
-DMG_PATH="$BUILD_DIR/ShotLens-$APP_VERSION.dmg"
 CODESIGN_IDENTITY="${SHOTLENS_CODESIGN_IDENTITY:-}"
+
+if [[ -z "${SHOTLENS_APP_VERSION:-}" ]]; then
+  echo "SHOTLENS_APP_VERSION must be set after choosing the release version, for example v0.8.6." >&2
+  exit 1
+fi
+
+APP_VERSION="$SHOTLENS_APP_VERSION"
+DMG_PATH="$BUILD_DIR/ShotLens-$APP_VERSION.dmg"
 
 if [[ ! "$APP_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "Release version must use three-part semver like v1.1.0, got: $APP_VERSION" >&2

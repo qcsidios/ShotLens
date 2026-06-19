@@ -2,7 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="${SHOTLENS_APP_VERSION:-$("$ROOT_DIR/scripts/next-release-version.sh")}"
+
+if [[ -z "${SHOTLENS_APP_VERSION:-}" ]]; then
+  echo "SHOTLENS_APP_VERSION must be set after choosing the release version, for example v0.8.6." >&2
+  exit 1
+fi
+
+VERSION="$SHOTLENS_APP_VERSION"
 DMG_PATH="$ROOT_DIR/build/release/ShotLens-$VERSION.dmg"
 RELEASE_NOTES_PATH="${SHOTLENS_RELEASE_NOTES_FILE:-$ROOT_DIR/scripts/release-notes/$VERSION.md}"
 
