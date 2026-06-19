@@ -1,6 +1,8 @@
 import AppKit
 import CoreGraphics
+import CoreVideo
 import ImageIO
+import ScreenCaptureKit
 
 struct CapturedScreenshot {
     let image: CGImage
@@ -13,7 +15,7 @@ struct FrozenScreenshot {
     let screenRect: CGRect
 }
 
-/// 截图工具。ShotLens 负责全屏蒙版和选区交互；这里仅按选区调用系统截图。
+/// 截图工具。ShotLens 负责全屏蒙版和选区交互；这里在进程内捕获当前屏幕。
 struct ScreenshotCapture {
     func hasScreenCaptureAccess() -> Bool {
         CGPreflightScreenCaptureAccess()
@@ -30,19 +32,24 @@ struct ScreenshotCapture {
     }
 
     func capture(selection rect: CGRect) async throws -> CapturedScreenshot? {
-        try await capture(rect: rect, purpose: "选区截图")
+        guard let frozenSnapshot = try await captureFrozenDisplay() else {
+            return nil
+        }
+        return try crop(frozenSnapshot: frozenSnapshot, selection: rect)
     }
 
     func captureFrozenDisplay() async throws -> FrozenScreenshot? {
         guard let screenRect = displayFrames().unionRect() else {
             return nil
         }
-        guard let captured = try await capture(rect: screenRect, purpose: "冻结全屏") else {
-            return nil
-        }
+        let image = try await captureVisibleDisplayImage(screenRect: screenRect)
+        let outputURL = temporaryPNGURL()
+        try writePNG(image, to: outputURL)
+        ShotLensLogger.log("冻结屏幕：ScreenCaptureKit 进程内截图，输出 \(outputURL.path)")
+
         return FrozenScreenshot(
-            image: captured.image,
-            fileURL: captured.fileURL,
+            image: image,
+            fileURL: outputURL,
             screenRect: screenRect
         )
     }
@@ -81,102 +88,140 @@ struct ScreenshotCapture {
         return CapturedScreenshot(image: normalizedImage, fileURL: outputURL)
     }
 
-    private func capture(rect: CGRect, purpose: String) async throws -> CapturedScreenshot? {
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ShotLens-\(UUID().uuidString)")
-            .appendingPathExtension("png")
-        let captureRect = screencaptureRect(for: rect)
-        let rectArgument = "\(captureRect.x),\(captureRect.y),\(captureRect.width),\(captureRect.height)"
-        ShotLensLogger.log("\(purpose)：调用系统截图 -R \(rectArgument)，输出 \(outputURL.path)")
-
-        return try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-            process.arguments = [
-                "-x",
-                "-R",
-                rectArgument,
-                outputURL.path
-            ]
-            let stderr = Pipe()
-            process.standardError = stderr
-            let resumeState = ScreenshotProcessResumeState(continuation: continuation)
-            let timeout = DispatchWorkItem {
-                if process.isRunning {
-                    process.terminate()
-                }
-            }
-
-            process.terminationHandler = { process in
-                timeout.cancel()
-                let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-                let errorText = String(data: errorData, encoding: .utf8)?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-                guard process.terminationStatus == 0 else {
-                    resumeState.resume(.failure(ScreenshotCaptureError.commandFailed(
-                        status: process.terminationStatus,
-                        stderr: errorText
-                    )))
-                    return
-                }
-
-                guard FileManager.default.fileExists(atPath: outputURL.path) else {
-                    resumeState.resume(.failure(ScreenshotCaptureError.missingOutput(
-                        path: outputURL.path,
-                        stderr: errorText
-                    )))
-                    return
-                }
-
-                guard let image = loadImage(from: outputURL) else {
-                    resumeState.resume(.failure(ScreenshotCaptureError.emptyImage))
-                    return
-                }
-
-                resumeState.resume(.success(CapturedScreenshot(image: image, fileURL: outputURL)))
-            }
-
-            do {
-                try process.run()
-                DispatchQueue.global().asyncAfter(deadline: .now() + 15, execute: timeout)
-            } catch {
-                timeout.cancel()
-                resumeState.resume(.failure(error))
-            }
-        }
-    }
-
     private func temporaryPNGURL() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("ShotLens-\(UUID().uuidString)")
             .appendingPathExtension("png")
     }
 
-    private func screencaptureRect(for selectionRect: CGRect) -> (x: Int, y: Int, width: Int, height: Int) {
-        let displayUnion = displayFrames().unionRect() ?? selectionRect
-        let x = selectionRect.minX - displayUnion.minX
-        let y = displayUnion.maxY - selectionRect.maxY
+    private func captureVisibleDisplayImage(screenRect: CGRect) async throws -> CGImage {
+        if #available(macOS 15.2, *) {
+            return try await captureScreenRectImage(screenRect)
+        }
 
-        return (
-            x: max(0, Int(x.rounded(.down))),
-            y: max(0, Int(y.rounded(.down))),
-            width: max(1, Int(selectionRect.width.rounded(.up))),
-            height: max(1, Int(selectionRect.height.rounded(.up)))
+        return try await captureDisplayComposite(screenRect: screenRect)
+    }
+
+    @available(macOS 15.2, *)
+    private func captureScreenRectImage(_ screenRect: CGRect) async throws -> CGImage {
+        try await withCheckedThrowingContinuation { continuation in
+            SCScreenshotManager.captureImage(in: screenRect) { image, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let image else {
+                    continuation.resume(throwing: ScreenshotCaptureError.emptyImage)
+                    return
+                }
+
+                continuation.resume(returning: normalizedCopy(of: image) ?? image)
+            }
+        }
+    }
+
+    private func captureDisplayComposite(screenRect: CGRect) async throws -> CGImage {
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else {
+            throw ScreenshotCaptureError.emptyImage
+        }
+        let content = try await SCShareableContent.current
+        let screensByDisplayID = Dictionary(
+            uniqueKeysWithValues: screens.compactMap { screen -> (CGDirectDisplayID, NSScreen)? in
+                guard let displayID = displayID(for: screen) else { return nil }
+                return (displayID, screen)
+            }
         )
+
+        let scale = max(screens.map(\.backingScaleFactor).max() ?? 1.0, 1.0)
+        let width = max(1, Int(ceil(screenRect.width * scale)))
+        let height = max(1, Int(ceil(screenRect.height * scale)))
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
+            throw ScreenshotCaptureError.emptyImage
+        }
+
+        context.interpolationQuality = .none
+        context.translateBy(x: 0, y: CGFloat(height))
+        context.scaleBy(x: scale, y: -scale)
+
+        for display in content.displays {
+            guard let screen = screensByDisplayID[display.displayID] else {
+                continue
+            }
+            let filter = SCContentFilter(display: display, excludingWindows: [])
+            if #available(macOS 14.2, *) {
+                filter.includeMenuBar = true
+            }
+
+            let displayScale = max(CGFloat(filter.pointPixelScale), screen.backingScaleFactor, 1.0)
+            let configuration = SCStreamConfiguration()
+            configuration.width = max(1, Int(ceil(CGFloat(display.width) * displayScale)))
+            configuration.height = max(1, Int(ceil(CGFloat(display.height) * displayScale)))
+            configuration.pixelFormat = kCVPixelFormatType_32BGRA
+            configuration.showsCursor = false
+            configuration.capturesAudio = false
+            configuration.queueDepth = 1
+            configuration.captureResolution = .best
+
+            let image = try await captureImage(contentFilter: filter, configuration: configuration)
+
+            let destination = CGRect(
+                x: screen.frame.minX - screenRect.minX,
+                y: screenRect.maxY - screen.frame.maxY,
+                width: screen.frame.width,
+                height: screen.frame.height
+            )
+            context.draw(image, in: destination)
+        }
+
+        guard let image = context.makeImage() else {
+            throw ScreenshotCaptureError.emptyImage
+        }
+        return image
+    }
+
+    private func captureImage(
+        contentFilter: SCContentFilter,
+        configuration: SCStreamConfiguration
+    ) async throws -> CGImage {
+        try await withCheckedThrowingContinuation { continuation in
+            SCScreenshotManager.captureImage(
+                contentFilter: contentFilter,
+                configuration: configuration
+            ) { image, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let image else {
+                    continuation.resume(throwing: ScreenshotCaptureError.emptyImage)
+                    return
+                }
+
+                continuation.resume(returning: image)
+            }
+        }
+    }
+
+    private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        return (screen.deviceDescription[key] as? NSNumber).map { CGDirectDisplayID($0.uint32Value) }
     }
 
     private func screen(containing rect: CGRect) -> NSScreen? {
         let center = CGPoint(x: rect.midX, y: rect.midY)
         return NSScreen.screens.first { $0.frame.contains(center) } ?? NSScreen.main
-    }
-
-    private func loadImage(from url: URL) -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            return nil
-        }
-        return normalizedCopy(of: image) ?? image
     }
 
     private func normalizedCopy(of image: CGImage) -> CGImage? {
@@ -218,47 +263,18 @@ struct ScreenshotCapture {
     }
 }
 
-private final class ScreenshotProcessResumeState: @unchecked Sendable {
-    private let lock = NSLock()
-    private var hasResumed = false
-    private let continuation: CheckedContinuation<CapturedScreenshot?, Error>
-
-    init(continuation: CheckedContinuation<CapturedScreenshot?, Error>) {
-        self.continuation = continuation
-    }
-
-    func resume(_ result: Result<CapturedScreenshot?, Error>) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !hasResumed else { return }
-        hasResumed = true
-
-        switch result {
-        case .success(let screenshot):
-            continuation.resume(returning: screenshot)
-        case .failure(let error):
-            continuation.resume(throwing: error)
-        }
-    }
-}
-
 private enum ScreenshotCaptureError: LocalizedError {
     case emptyImage
-    case commandFailed(status: Int32, stderr: String)
     case missingOutput(path: String, stderr: String)
 
     var errorDescription: String? {
         switch self {
         case .emptyImage:
             return "截图文件无法读取或内容为空"
-        case .commandFailed(let status, let stderr):
-            return stderr.isEmpty
-                ? "系统截图命令失败，退出码 \(status)"
-                : "系统截图命令失败，退出码 \(status)：\(stderr)"
         case .missingOutput(let path, let stderr):
             return stderr.isEmpty
-                ? "系统截图命令成功但未生成输出文件：\(path)"
-                : "系统截图命令成功但未生成输出文件：\(path)，stderr：\(stderr)"
+                ? "截图成功但未生成输出文件：\(path)"
+                : "截图成功但未生成输出文件：\(path)，stderr：\(stderr)"
         }
     }
 }

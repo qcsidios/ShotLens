@@ -14,7 +14,6 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 EXECUTABLE="$MACOS_DIR/$APP_NAME"
 OCR_EXECUTABLE="$MACOS_DIR/ShotLensOCR"
-SELECT_EXECUTABLE="$MACOS_DIR/ShotLensSelect"
 DEPLOY_DIR="${SHOTLENS_DEPLOY_DIR:-$BUILD_DIR}"
 DEPLOY_APP_DIR="$DEPLOY_DIR/$APP_NAME.app"
 CODESIGN_IDENTITY="${SHOTLENS_CODESIGN_IDENTITY:-}"
@@ -39,12 +38,6 @@ swiftc \
   -parse-as-library \
   "$ROOT_DIR/ShotLens/Tools/ShotLensOCR.swift" \
   -o "$OCR_EXECUTABLE"
-
-swiftc \
-  -O \
-  -parse-as-library \
-  "$ROOT_DIR/ShotLens/Tools/ShotLensSelect.swift" \
-  -o "$SELECT_EXECUTABLE"
 
 cp "$ROOT_DIR/ShotLens/Resources/ShotLens.icns" "$RESOURCES_DIR/ShotLens.icns"
 cp "$ROOT_DIR/ShotLens/Resources/ShotLensMenuBarTemplate.png" "$RESOURCES_DIR/ShotLensMenuBarTemplate.png"
@@ -84,7 +77,7 @@ PLIST
 
 printf 'APPL????' > "$CONTENTS_DIR/PkgInfo"
 
-chmod +x "$EXECUTABLE" "$OCR_EXECUTABLE" "$SELECT_EXECUTABLE"
+chmod +x "$EXECUTABLE" "$OCR_EXECUTABLE"
 if [[ -n "$CODESIGN_IDENTITY" ]]; then
   codesign --force --deep --sign "$CODESIGN_IDENTITY" "$APP_DIR" >/dev/null
 else

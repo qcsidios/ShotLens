@@ -12,9 +12,9 @@
 		3A9FAEEC0162DA5D499E526D /* OCREngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B0EA5F995E50D64F86B572 /* OCREngine.swift */; };
 		5E8CE4ABA0F7DEC953079B77 /* TranslationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70274E80564831602C46BC1 /* TranslationProvider.swift */; };
 		BD964147A26324B530AFF011 /* OverlayWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FBF622045FA1CCE5071C395 /* OverlayWindow.swift */; };
+		AA100000000000000000000C /* InProcessSelectionOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA200000000000000000000C /* InProcessSelectionOverlay.swift */; };
 		2F97AF1B16D3F0F613C1C2CF /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F13450B6D333B20F2D8454CE /* ClipboardManager.swift */; };
 		AA1000000000000000000002 /* LLMTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000002 /* LLMTranslator.swift */; };
-		AA1000000000000000000003 /* SelectionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000003 /* SelectionClient.swift */; };
 		AA1000000000000000000004 /* ShotLensLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000004 /* ShotLensLanguage.swift */; };
 		AA1000000000000000000005 /* ShotLensLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000005 /* ShotLensLogger.swift */; };
 		AA1000000000000000000006 /* TextLayoutOptimizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000006 /* TextLayoutOptimizer.swift */; };
@@ -35,9 +35,9 @@
 		56B0EA5F995E50D64F86B572 /* OCREngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCREngine.swift; sourceTree = "<group>"; };
 		F70274E80564831602C46BC1 /* TranslationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationProvider.swift; sourceTree = "<group>"; };
 		3FBF622045FA1CCE5071C395 /* OverlayWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindow.swift; sourceTree = "<group>"; };
+		AA200000000000000000000C /* InProcessSelectionOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InProcessSelectionOverlay.swift; sourceTree = "<group>"; };
 		F13450B6D333B20F2D8454CE /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardManager.swift; sourceTree = "<group>"; };
 		AA2000000000000000000002 /* LLMTranslator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMTranslator.swift; sourceTree = "<group>"; };
-		AA2000000000000000000003 /* SelectionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionClient.swift; sourceTree = "<group>"; };
 		AA2000000000000000000004 /* ShotLensLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotLensLanguage.swift; sourceTree = "<group>"; };
 		AA2000000000000000000005 /* ShotLensLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotLensLogger.swift; sourceTree = "<group>"; };
 		AA2000000000000000000006 /* TextLayoutOptimizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextLayoutOptimizer.swift; sourceTree = "<group>"; };
@@ -85,9 +85,9 @@
 				56B0EA5F995E50D64F86B572 /* OCREngine.swift */,
 				F70274E80564831602C46BC1 /* TranslationProvider.swift */,
 				3FBF622045FA1CCE5071C395 /* OverlayWindow.swift */,
+				AA200000000000000000000C /* InProcessSelectionOverlay.swift */,
 				F13450B6D333B20F2D8454CE /* ClipboardManager.swift */,
 				AA2000000000000000000002 /* LLMTranslator.swift */,
-				AA2000000000000000000003 /* SelectionClient.swift */,
 				AA2000000000000000000004 /* ShotLensLanguage.swift */,
 				AA2000000000000000000005 /* ShotLensLogger.swift */,
 				AA2000000000000000000006 /* TextLayoutOptimizer.swift */,
@@ -205,9 +205,9 @@
 				3A9FAEEC0162DA5D499E526D /* OCREngine.swift in Sources */,
 				5E8CE4ABA0F7DEC953079B77 /* TranslationProvider.swift in Sources */,
 				BD964147A26324B530AFF011 /* OverlayWindow.swift in Sources */,
+				AA100000000000000000000C /* InProcessSelectionOverlay.swift in Sources */,
 				2F97AF1B16D3F0F613C1C2CF /* ClipboardManager.swift in Sources */,
 				AA1000000000000000000002 /* LLMTranslator.swift in Sources */,
-				AA1000000000000000000003 /* SelectionClient.swift in Sources */,
 				AA1000000000000000000004 /* ShotLensLanguage.swift in Sources */,
 				AA1000000000000000000005 /* ShotLensLogger.swift in Sources */,
 				AA1000000000000000000006 /* TextLayoutOptimizer.swift in Sources */,

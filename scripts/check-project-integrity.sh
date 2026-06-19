@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 required_files=(
   "$ROOT_DIR/ShotLens/App/Info.plist"
   "$ROOT_DIR/ShotLens/Tools/ShotLensOCR.swift"
-  "$ROOT_DIR/ShotLens/Tools/ShotLensSelect.swift"
+  "$ROOT_DIR/ShotLens/Core/InProcessSelectionOverlay.swift"
   "$ROOT_DIR/ShotLens/Core/LLMTranslator.swift"
   "$ROOT_DIR/ShotLens/Core/LLMConnectionChecker.swift"
   "$ROOT_DIR/ShotLens/Core/AppUpdater.swift"
@@ -37,9 +37,13 @@ fi
 rg -n '^import Vision$' "$ROOT_DIR/ShotLens/Tools/ShotLensOCR.swift" >/dev/null
 
 rg -n 'ShotLens/Tools/ShotLensOCR.swift' "$ROOT_DIR/scripts/build-local.sh" >/dev/null
-rg -n 'ShotLens/Tools/ShotLensSelect.swift' "$ROOT_DIR/scripts/build-local.sh" >/dev/null
+if rg -n 'ShotLensSelect|SelectionClient' "$ROOT_DIR/scripts/build-local.sh" "$ROOT_DIR/ShotLens/App" "$ROOT_DIR/ShotLens/Core" >/dev/null; then
+  echo "Primary selection flow must not build or call the old ShotLensSelect helper." >&2
+  exit 1
+fi
 rg -n 'LLMConnectionChecker.swift' "$ROOT_DIR/ShotLens.xcodeproj/project.pbxproj" >/dev/null
 rg -n 'AppUpdater.swift' "$ROOT_DIR/ShotLens.xcodeproj/project.pbxproj" >/dev/null
+rg -n 'InProcessSelectionOverlay.swift' "$ROOT_DIR/ShotLens.xcodeproj/project.pbxproj" >/dev/null
 rg -n 'chatCompletionsURL' "$ROOT_DIR/ShotLens/Core/LLMTranslator.swift" >/dev/null
 rg -n 'LLMConnectionChecker' "$ROOT_DIR/ShotLens/App/MainWindow.swift" >/dev/null
 rg -n 'AppUpdater' "$ROOT_DIR/ShotLens/App/MainWindow.swift" >/dev/null

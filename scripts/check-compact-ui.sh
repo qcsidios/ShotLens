@@ -4,7 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 MAIN_WINDOW="$ROOT_DIR/ShotLens/App/MainWindow.swift"
 OVERLAY_WINDOW="$ROOT_DIR/ShotLens/Core/OverlayWindow.swift"
-SELECT_WINDOW="$ROOT_DIR/ShotLens/Tools/ShotLensSelect.swift"
+SELECTION_OVERLAY="$ROOT_DIR/ShotLens/Core/InProcessSelectionOverlay.swift"
+SCREENSHOT_CAPTURE="$ROOT_DIR/ShotLens/Core/ScreenshotCapture.swift"
+SHOTLENS_APP="$ROOT_DIR/ShotLens/App/ShotLensApp.swift"
 
 rg -n 'apiDetailsExpandedKey' "$MAIN_WINDOW" >/dev/null
 rg -n 'apiDetailsContainer' "$MAIN_WINDOW" >/dev/null
@@ -21,6 +23,10 @@ rg -n 'NSButton\(title: "测试"' "$MAIN_WINDOW" >/dev/null
 rg -n 'apiDefaultNoteLabel' "$MAIN_WINDOW" >/dev/null
 rg -n '默认限免' "$MAIN_WINDOW" >/dev/null
 
+if rg -n 'showReleaseNotesIfNeeded|lastShownReleaseNotesVersionKey|更新完成' "$SHOTLENS_APP" >/dev/null; then
+  echo "App launch must not show automatic release/update reminder popups." >&2
+  exit 1
+fi
 if rg -n '截图翻译控制台' "$MAIN_WINDOW" >/dev/null; then
   echo "Main window should not repeat 截图翻译控制台 in the header." >&2
   exit 1
@@ -37,10 +43,21 @@ if rg -n 'NSApp\.activate\(ignoringOtherApps: true\)' "$OVERLAY_WINDOW" >/dev/nu
   echo "Result overlay must not activate the main app because activation can switch away from fullscreen Spaces." >&2
   exit 1
 fi
-rg -n 'NSPanel' "$OVERLAY_WINDOW" "$SELECT_WINDOW" >/dev/null
-rg -n 'nonactivatingPanel' "$OVERLAY_WINDOW" "$SELECT_WINDOW" >/dev/null
-rg -n 'screenSaver' "$OVERLAY_WINDOW" "$SELECT_WINDOW" >/dev/null
-rg -n '\.stationary' "$OVERLAY_WINDOW" "$SELECT_WINDOW" >/dev/null
+rg -n 'NSPanel' "$OVERLAY_WINDOW" "$SELECTION_OVERLAY" >/dev/null
+rg -n 'nonactivatingPanel' "$OVERLAY_WINDOW" "$SELECTION_OVERLAY" >/dev/null
+rg -n 'screenSaver' "$OVERLAY_WINDOW" "$SELECTION_OVERLAY" >/dev/null
+rg -n '\.stationary' "$OVERLAY_WINDOW" "$SELECTION_OVERLAY" >/dev/null
+rg -n 'import ScreenCaptureKit' "$SCREENSHOT_CAPTURE" >/dev/null
+rg -n 'SCScreenshotManager' "$SCREENSHOT_CAPTURE" >/dev/null
+if rg -n '/usr/sbin/screencapture|CGWindowListCreateImage|CGDisplayCreateImage|process\.executableURL|process\.run\(\)' "$SCREENSHOT_CAPTURE" >/dev/null; then
+  echo "Primary screenshot capture must stay in-process; external screencapture causes visible Space/window refresh." >&2
+  exit 1
+fi
+if rg -n 'SelectionClient\(\)\.select|ShotLensSelect' "$SHOTLENS_APP" "$ROOT_DIR/ShotLens/Core" "$ROOT_DIR/scripts/build-local.sh" >/dev/null; then
+  echo "Primary selection flow must stay in-process; cold-launching ShotLensSelect can cause a visible flash." >&2
+  exit 1
+fi
+rg -n 'InProcessSelectionOverlay' "$SHOTLENS_APP" "$SELECTION_OVERLAY" >/dev/null
 rg -n 'containedRenderRect\(for: baseRect\)' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'var best = minimumSize' "$OVERLAY_WINDOW" >/dev/null
 

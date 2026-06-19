@@ -88,6 +88,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     func hide() {
+        guard window?.isVisible == true else { return }
         window?.orderOut(nil)
     }
 

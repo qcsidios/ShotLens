@@ -5,7 +5,6 @@ import Carbon
 @main
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private static let lastShownReleaseNotesVersionKey = "ShotLens_LastShownReleaseNotesVersion"
     private static var retainedDelegate: AppDelegate?
 
     private var statusItem: NSStatusItem?
@@ -14,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKeyID = EventHotKeyID(signature: 0x53484F54, id: 1) // "SHOT"
     private let mainWindowController = MainWindowController()
     private var resultOverlay: OverlayWindow?
+    private var activeSelectionOverlay: InProcessSelectionOverlay?
     private var isProcessing = false
     private var isRecordingShortcut = false
     /// 弱引用 self 供 C 回调使用
@@ -56,7 +56,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         openMainWindow()
-        showReleaseNotesIfNeeded()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -366,12 +365,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let selection: CGRect?
-        do {
-            selection = try await SelectionClient().select(frozenScreenshot: frozenSnapshot)
-        } catch {
-            ShotLensLogger.log("截图框选失败", error: error)
-            return
-        }
+        let selectionOverlay = InProcessSelectionOverlay()
+        activeSelectionOverlay = selectionOverlay
+        selection = await selectionOverlay.select(frozenScreenshot: frozenSnapshot)
+        activeSelectionOverlay = nil
 
         guard let selection else {
             ShotLensLogger.log("用户取消截图")
@@ -473,54 +470,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func userFacingTranslationFailureMessage(for error: Error) -> String {
         "翻译失败"
-    }
-
-    private func showReleaseNotesIfNeeded() {
-        guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
-              !version.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
-        }
-        let defaults = UserDefaults.standard
-        guard defaults.string(forKey: Self.lastShownReleaseNotesVersionKey) != version else {
-            return
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            let alert = NSAlert()
-            alert.messageText = "ShotLens v\(version) 更新完成"
-            alert.informativeText = Self.releaseNotesText(for: version)
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: "关闭")
-            alert.runModal()
-            defaults.set(version, forKey: Self.lastShownReleaseNotesVersionKey)
-        }
-    }
-
-    private static func releaseNotesText(for version: String) -> String {
-        switch version {
-        case "0.8.6":
-            return [
-                "• 修复全屏浏览器中截图翻译浮窗可能只在桌面显示的问题。",
-                "• 优化框选层和结果浮窗的全屏 Space 展示行为。",
-                "• 发布版本改为按迭代内容显式指定版本号。"
-            ].joined(separator: "\n")
-        case "0.8.5":
-            return [
-                "• 译文严格按 OCR 原位置呈现，避免跨区域重叠。",
-                "• 修复译文偶发忽大忽小和溢出的问题。",
-                "• 拦截“被拒绝”“高风险”等模型误答，提升翻译可靠性。",
-                "• 继续保留用户自定义 API 设置，升级不会清空。"
-            ].joined(separator: "\n")
-        case "0.8.3":
-            return [
-                "• 新版本检测改为文字按钮，界面更稳定。",
-                "• 翻译失败提示精简为“翻译失败”。",
-                "• 加强翻译兜底，减少格式异常导致的失败。",
-                "• 默认 API 状态改为“默认限免”。"
-            ].joined(separator: "\n")
-        default:
-            return "• 修复已知问题并提升稳定性。"
-        }
     }
 
     // MARK: - UI 桥接

@@ -76,7 +76,7 @@ bash scripts/build-local.sh
 打包 DMG：
 
 ```bash
-SHOTLENS_APP_VERSION=v0.8.6 bash scripts/package-dmg.sh
+SHOTLENS_APP_VERSION=v0.8.7 bash scripts/package-dmg.sh
 ```
 
 发布前请先根据迭代内容选择版本号：破坏性或大版本能力使用 major，新增能力使用 minor，缺陷修复使用 patch。脚本要求显式设置 `SHOTLENS_APP_VERSION`，避免不经判断自动跳版本。DMG 顶层只包含 `ShotLens.app` 和应用程序文件夹快捷方式。
@@ -119,10 +119,10 @@ bash scripts/check-dmg-layout.sh
 命令行方式：
 
 ```bash
-SHOTLENS_APP_VERSION=v0.8.6 bash scripts/release-github.sh
+SHOTLENS_APP_VERSION=v0.8.7 bash scripts/release-github.sh
 ```
 
-发布版本号必须使用三段式，例如 `v0.8.6`。发布前请先根据迭代内容决定版本号，并显式传入 `SHOTLENS_APP_VERSION`。
+发布版本号必须使用三段式，例如 `v0.8.7`。发布前请先根据迭代内容决定版本号，并显式传入 `SHOTLENS_APP_VERSION`。
 
 如果要为某个版本准备固定发布说明，可创建 `scripts/release-notes/vX.Y.Z.md`，发布脚本会自动使用它。
 
