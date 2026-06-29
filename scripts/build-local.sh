@@ -7,6 +7,7 @@ APP_VERSION="${SHOTLENS_APP_VERSION:-v1.0}"
 BUNDLE_SHORT_VERSION="${APP_VERSION#v}"
 APP_BUILD="${SHOTLENS_APP_BUILD:-1}"
 MIN_MACOS_VERSION="14.0"
+SWIFT_TARGET="arm64-apple-macosx$MIN_MACOS_VERSION"
 BUILD_DIR="$ROOT_DIR/build/local"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
@@ -26,15 +27,15 @@ while IFS= read -r source_file; do
   APP_SWIFT_SOURCES+=("$source_file")
 done < <(find "$ROOT_DIR/ShotLens" -name '*.swift' ! -path "$ROOT_DIR/ShotLens/Tools/*" | sort)
 
-export MACOSX_DEPLOYMENT_TARGET="$MIN_MACOS_VERSION"
-
 swiftc \
   -O \
+  -target "$SWIFT_TARGET" \
   "${APP_SWIFT_SOURCES[@]}" \
   -o "$EXECUTABLE"
 
 swiftc \
   -O \
+  -target "$SWIFT_TARGET" \
   -parse-as-library \
   "$ROOT_DIR/ShotLens/Tools/ShotLensOCR.swift" \
   -o "$OCR_EXECUTABLE"

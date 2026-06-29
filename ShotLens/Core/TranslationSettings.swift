@@ -9,7 +9,7 @@ struct TranslationSettings {
     static let defaultAPIEndpoint = "https://api.siliconflow.cn/v1"
     static let defaultAPIKey = "sk-iiwyxcrwfaiqixpbfitsogijhfjsiolqtntqszuixgohjpnb"
     static let defaultModel = "tencent/Hunyuan-MT-7B"
-    static let limitedFreeModelNotice = "混元模型当前限免，后续以服务商政策为准。"
+    static let limitedFreeModelNotice = "异常消耗时可能随时停用，建议自备 Key。"
 
     var apiEndpoint: String
     var apiKey: String

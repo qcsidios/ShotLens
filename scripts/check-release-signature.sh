@@ -9,6 +9,15 @@ if [[ ! -d "$APP_PATH" ]]; then
   exit 1
 fi
 
+declared_macos_version="$(plutil -extract LSMinimumSystemVersion raw "$APP_PATH/Contents/Info.plist")"
+for executable in "$APP_PATH/Contents/MacOS/ShotLens" "$APP_PATH/Contents/MacOS/ShotLensOCR"; do
+  actual_macos_version="$(otool -l "$executable" | awk '/LC_BUILD_VERSION/{found=1; next} found && $1=="minos" {print $2; exit}')"
+  if [[ "$actual_macos_version" != "$declared_macos_version" ]]; then
+    echo "$(basename "$executable") requires macOS $actual_macos_version, but Info.plist declares $declared_macos_version." >&2
+    exit 1
+  fi
+done
+
 signature_info="$(codesign -dv --verbose=4 "$APP_PATH" 2>&1 || true)"
 
 if rg -q 'Signature=adhoc' <<<"$signature_info"; then
