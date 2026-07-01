@@ -31,6 +31,7 @@ enum AppUpdateCheckResult: CustomStringConvertible {
 struct AppUpdater {
     static let repository = "qcsidios/ShotLens"
     static let latestReleaseURL = URL(string: "https://api.github.com/repos/\(repository)/releases/latest")!
+    static let automaticCheckInterval: TimeInterval = 24 * 60 * 60
 
     let currentVersion: String
     let session: URLSession
@@ -126,6 +127,11 @@ struct AppUpdater {
             if l > r { return .orderedDescending }
         }
         return .orderedSame
+    }
+
+    static func shouldAutomaticallyCheck(lastCheckedAt: Date?, now: Date = Date()) -> Bool {
+        guard let lastCheckedAt else { return true }
+        return now.timeIntervalSince(lastCheckedAt) >= automaticCheckInterval
     }
 
     private static var bundleShortVersion: String {

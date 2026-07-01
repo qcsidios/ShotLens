@@ -7,9 +7,12 @@ struct TranslationSettings {
     static let modelKey = "ShotLens_LLM_Model"
     static let defaultFallbackEnabledKey = "ShotLens_LLM_DefaultFallbackEnabled"
     static let defaultAPIEndpoint = "https://api.siliconflow.cn/v1"
-    static let defaultAPIKey = "sk-iiwyxcrwfaiqixpbfitsogijhfjsiolqtntqszuixgohjpnb"
+    static let defaultAPIKey = "sk-cbmblkvvwgpglgqitsvhoksrvghbpgsqvqfyenpjelcpymzp"
     static let defaultModel = "tencent/Hunyuan-MT-7B"
-    static let limitedFreeModelNotice = "异常消耗时可能随时停用，建议自备 Key。"
+    static let limitedFreeModelNotice = """
+    腾讯混元 MT 当前限免；若官方持续限免，默认限免将持续可用。
+    限免政策结束后，默认限免功能将停止；异常消耗时可能随时停用，建议自备 Key。
+    """
 
     var apiEndpoint: String
     var apiKey: String
@@ -26,7 +29,7 @@ struct TranslationSettings {
 
     var effectiveAPIEndpoint: String {
         let trimmed = apiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        return shouldUseDefaultFallback && trimmed.isEmpty ? Self.defaultAPIEndpoint : trimmed
+        return shouldUseDefaultFallback ? Self.defaultAPIEndpoint : trimmed
     }
 
     var effectiveAPIKey: String {
@@ -36,7 +39,7 @@ struct TranslationSettings {
 
     var effectiveModel: String {
         let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        return shouldUseDefaultFallback && trimmed.isEmpty ? Self.defaultModel : trimmed
+        return shouldUseDefaultFallback ? Self.defaultModel : trimmed
     }
 
     var chatCompletionsURL: URL? {
@@ -117,11 +120,7 @@ struct TranslationSettings {
 
     private var shouldUseDefaultFallback: Bool {
         guard defaultFallbackEnabled else { return false }
-        guard apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
-        let endpoint = apiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (endpoint.isEmpty || endpoint == Self.defaultAPIEndpoint)
-            && (model.isEmpty || model == Self.defaultModel)
+        return apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var normalizedEndpointString: String {

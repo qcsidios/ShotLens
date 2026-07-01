@@ -11,8 +11,28 @@ struct AppUpdaterSmoke {
         try await assertCurrentReleaseIsUpToDate(session: session)
         try await assertMissingDMGIsUnavailable(session: session)
         try await assertInvalidTagIsUnavailable(session: session)
+        try assertAutomaticCheckSchedule()
 
         print("App updater smoke test passed.")
+    }
+
+    private static func assertAutomaticCheckSchedule() throws {
+        let now = Date(timeIntervalSince1970: 200_000)
+        guard AppUpdater.shouldAutomaticallyCheck(lastCheckedAt: nil, now: now) else {
+            throw TestFailure("Expected first automatic update check to run")
+        }
+        guard !AppUpdater.shouldAutomaticallyCheck(
+            lastCheckedAt: now.addingTimeInterval(-(24 * 60 * 60) + 1),
+            now: now
+        ) else {
+            throw TestFailure("Expected automatic update check to wait for 24 hours")
+        }
+        guard AppUpdater.shouldAutomaticallyCheck(
+            lastCheckedAt: now.addingTimeInterval(-(24 * 60 * 60)),
+            now: now
+        ) else {
+            throw TestFailure("Expected automatic update check after 24 hours")
+        }
     }
 
     private static func assertFindsNewerRelease(session: URLSession) async throws {

@@ -72,6 +72,7 @@ struct TranslationEndpointSmoke {
         try await assertSingleItemFallbackRecoversWhenRepairFails()
         try await assertSingleItemFallbackUsesBestEffortWithoutRepair()
         try await assertEmptySavedSettingsUseDefaultAPI()
+        try await assertDefaultFallbackForcesBuiltInEndpointAndModel()
         try await assertCustomSavedSettingsSurviveLoad()
         try await assertClearSavedSettingsDisableDefaultAPI()
         try await assertConnectionCheckUsesChatCompletions()
@@ -151,6 +152,21 @@ struct TranslationEndpointSmoke {
         let firstBody = MockOpenAIProtocol.requestBodies.first ?? ""
         guard firstBody.contains("Hunyuan-MT-7B") else {
             throw TestFailure("Expected translator payload to include default model, got: \(firstBody)")
+        }
+    }
+
+    private static func assertDefaultFallbackForcesBuiltInEndpointAndModel() async throws {
+        let settings = TranslationSettings(
+            apiEndpoint: "https://unexpected.example/v1",
+            apiKey: "",
+            model: "unexpected-model",
+            defaultFallbackEnabled: true
+        )
+
+        guard settings.usesDefaultAPIKey,
+              settings.effectiveAPIEndpoint == TranslationSettings.defaultAPIEndpoint,
+              settings.effectiveModel == TranslationSettings.defaultModel else {
+            throw TestFailure("Expected default fallback to ignore saved endpoint and model overrides")
         }
     }
 

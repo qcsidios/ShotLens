@@ -23,7 +23,12 @@ rg -n 'NSButton\(title: "恢复默认"' "$MAIN_WINDOW" >/dev/null
 rg -n 'NSButton\(title: "测试"' "$MAIN_WINDOW" >/dev/null
 rg -n 'apiDefaultNoteLabel' "$MAIN_WINDOW" >/dev/null
 rg -n '默认限免' "$MAIN_WINDOW" >/dev/null
+rg -n '限免政策结束后，默认限免功能将停止' "$TRANSLATION_SETTINGS" >/dev/null
 rg -n '异常消耗时可能随时停用，建议自备 Key' "$TRANSLATION_SETTINGS" >/dev/null
+rg -n 'usesDefaultAPIKey \\|\\| !isApiDetailsExpanded' "$MAIN_WINDOW" >/dev/null
+rg -n -F 'toggleAPIButton.title = usesDefaultAPIKey ? "自备 API"' "$MAIN_WINDOW" >/dev/null
+rg -n 'scheduleAutomaticUpdateChecks' "$MAIN_WINDOW" >/dev/null
+rg -n 'performAutomaticUpdateCheckIfNeeded' "$MAIN_WINDOW" >/dev/null
 
 if rg -n 'showReleaseNotesIfNeeded|lastShownReleaseNotesVersionKey|更新完成' "$SHOTLENS_APP" >/dev/null; then
   echo "App launch must not show automatic release/update reminder popups." >&2

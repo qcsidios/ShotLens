@@ -4,6 +4,7 @@ import ServiceManagement
 
 final class MainWindowController: NSObject, NSTextFieldDelegate {
     private static let apiDetailsExpandedKey = "ShotLens_API_DetailsExpanded"
+    private static let lastAutomaticUpdateCheckKey = "ShotLens_LastAutomaticUpdateCheck"
     private var window: NSWindow?
     private var permissionStatusLabel: NSTextField?
     private var apiStatusLabel: NSTextField?
@@ -37,6 +38,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private var connectionState: ConnectionState = .untested
     private var connectionTestTask: Task<Void, Never>?
     private var updateTask: Task<Void, Never>?
+    private var automaticUpdateCheckTimer: Timer?
     private var availableUpdate: AppUpdate?
 
     private var pendingSave: DispatchWorkItem?
@@ -67,6 +69,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     deinit {
+        automaticUpdateCheckTimer?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -83,6 +86,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
         loadSettings()
         refreshStatus()
+        scheduleAutomaticUpdateChecks()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -342,11 +346,12 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         details.addArrangedSubview(modelFieldRow())
         details.addArrangedSubview(actionRow)
 
-        let note = label("Key 留空时使用默认限免；\(TranslationSettings.limitedFreeModelNotice)", font: .systemFont(ofSize: 12), color: .secondaryLabelColor)
-        note.lineBreakMode = .byTruncatingTail
+        let note = label(TranslationSettings.limitedFreeModelNotice, font: .systemFont(ofSize: 12), color: .secondaryLabelColor)
+        note.lineBreakMode = .byWordWrapping
+        note.maximumNumberOfLines = 0
         apiDefaultNoteLabel = note
-        details.addArrangedSubview(note)
         card.addArrangedSubview(details)
+        card.addArrangedSubview(note)
         return card
     }
 
@@ -553,13 +558,15 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     private func updateAPIExpandedState() {
-        apiDetailsContainer?.isHidden = !isApiDetailsExpanded
-        toggleAPIButton.title = isApiDetailsExpanded ? "收起" : "展开"
+        let usesDefaultAPIKey = currentDraftSettings().usesDefaultAPIKey
+        apiDetailsContainer?.isHidden = usesDefaultAPIKey || !isApiDetailsExpanded
+        toggleAPIButton.title = usesDefaultAPIKey ? "自备 API" : (isApiDetailsExpanded ? "收起" : "展开")
     }
 
     private func updateWindowHeight(animated: Bool) {
         guard let window else { return }
-        let targetHeight: CGFloat = isApiDetailsExpanded ? 560 : 430
+        let settings = currentDraftSettings()
+        let targetHeight: CGFloat = settings.usesDefaultAPIKey ? 455 : (isApiDetailsExpanded ? 560 : 430)
         var frame = window.frame
         guard abs(frame.height - targetHeight) > 0.5 else { return }
         frame.origin.y += frame.height - targetHeight
@@ -718,35 +725,51 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     @objc private func toggleAPIExpandedClicked() {
-        isApiDetailsExpanded.toggle()
+        if currentDraftSettings().usesDefaultAPIKey {
+            defaultFallbackEnabled = false
+            isApiDetailsExpanded = true
+            currentDraftSettings().save()
+        } else {
+            isApiDetailsExpanded.toggle()
+        }
         UserDefaults.standard.set(isApiDetailsExpanded, forKey: Self.apiDetailsExpandedKey)
         updateAPIExpandedState()
+        refreshStatus()
         updateWindowHeight(animated: true)
     }
 
     // MARK: - 更新检查
 
     @objc private func checkForUpdatesClicked() {
+        startUpdateCheck(showsProgress: true)
+    }
+
+    private func startUpdateCheck(showsProgress: Bool) {
         updateTask?.cancel()
         availableUpdate = nil
         installUpdateButton.isHidden = true
-        checkUpdateButton.isEnabled = false
-        checkUpdateButton.title = "检测中…"
-        updateStatusLabel?.stringValue = "检查中…"
-        updateStatusLabel?.textColor = .secondaryLabelColor
+        if showsProgress {
+            checkUpdateButton.isEnabled = false
+            checkUpdateButton.title = "检测中…"
+            updateStatusLabel?.stringValue = "检查中…"
+            updateStatusLabel?.textColor = .secondaryLabelColor
+        }
 
         updateTask = Task { [weak self] in
             let result = await AppUpdater().checkForUpdate()
             guard !Task.isCancelled, let controller = self else { return }
             await MainActor.run {
-                controller.applyUpdateCheckResult(result)
+                controller.applyUpdateCheckResult(result, showsProgress: showsProgress)
             }
         }
     }
 
-    private func applyUpdateCheckResult(_ result: AppUpdateCheckResult) {
-        checkUpdateButton.isEnabled = true
-        checkUpdateButton.title = "检测新版本"
+    private func applyUpdateCheckResult(_ result: AppUpdateCheckResult, showsProgress: Bool) {
+        updateTask = nil
+        if showsProgress {
+            checkUpdateButton.isEnabled = true
+            checkUpdateButton.title = "检测新版本"
+        }
         switch result {
         case .available(let update):
             availableUpdate = update
@@ -754,16 +777,36 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
             updateStatusLabel?.textColor = .systemGreen
             installUpdateButton.isHidden = false
         case .upToDate:
+            guard showsProgress else { return }
             availableUpdate = nil
             updateStatusLabel?.stringValue = "已是最新版"
             updateStatusLabel?.textColor = .secondaryLabelColor
             installUpdateButton.isHidden = true
         case .failed:
+            guard showsProgress else { return }
             availableUpdate = nil
             updateStatusLabel?.stringValue = "无法连接更新服务器"
             updateStatusLabel?.textColor = .systemOrange
             installUpdateButton.isHidden = true
         }
+    }
+
+    private func scheduleAutomaticUpdateChecks() {
+        performAutomaticUpdateCheckIfNeeded()
+        guard automaticUpdateCheckTimer == nil else { return }
+        automaticUpdateCheckTimer = Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { [weak self] _ in
+            self?.performAutomaticUpdateCheckIfNeeded()
+        }
+    }
+
+    private func performAutomaticUpdateCheckIfNeeded() {
+        guard updateTask == nil, availableUpdate == nil else { return }
+        let defaults = UserDefaults.standard
+        let lastCheckedAt = defaults.object(forKey: Self.lastAutomaticUpdateCheckKey) as? Date
+        let now = Date()
+        guard AppUpdater.shouldAutomaticallyCheck(lastCheckedAt: lastCheckedAt, now: now) else { return }
+        defaults.set(now, forKey: Self.lastAutomaticUpdateCheckKey)
+        startUpdateCheck(showsProgress: false)
     }
 
     @objc private func installUpdateClicked() {
@@ -967,6 +1010,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     @objc private func appDidBecomeActive() {
         refreshStatus()
+        performAutomaticUpdateCheckIfNeeded()
     }
 
     func controlTextDidChange(_ obj: Notification) {
