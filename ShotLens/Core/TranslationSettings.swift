@@ -9,10 +9,7 @@ struct TranslationSettings {
     static let defaultAPIEndpoint = "https://api.siliconflow.cn/v1"
     static let defaultAPIKey = "sk-cbmblkvvwgpglgqitsvhoksrvghbpgsqvqfyenpjelcpymzp"
     static let defaultModel = "tencent/Hunyuan-MT-7B"
-    static let limitedFreeModelNotice = """
-    腾讯混元 MT 当前限免；若官方持续限免，默认限免将持续可用。
-    限免政策结束后，默认限免功能将停止；异常消耗时可能随时停用，建议自备 Key。
-    """
+    static let limitedFreeModelNotice = "腾讯混元模型当前限免；政策结束或出现异常消耗时，默认限免可能停用，建议自备 API。"
 
     var apiEndpoint: String
     var apiKey: String
@@ -80,10 +77,13 @@ struct TranslationSettings {
     static func load() -> TranslationSettings {
         let defaults = UserDefaults.standard
         let fallbackEnabled = defaults.object(forKey: defaultFallbackEnabledKey) as? Bool ?? true
+        let apiKey = defaults.string(forKey: apiKeyKey) ?? ""
+        let usesDefaultFallback = fallbackEnabled
+            && apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return TranslationSettings(
-            apiEndpoint: fallbackEnabled ? defaultedValue(defaults.string(forKey: apiEndpointKey), fallback: defaultAPIEndpoint) : (defaults.string(forKey: apiEndpointKey) ?? ""),
-            apiKey: defaults.string(forKey: apiKeyKey) ?? "",
-            model: fallbackEnabled ? defaultedValue(defaults.string(forKey: modelKey), fallback: defaultModel) : (defaults.string(forKey: modelKey) ?? ""),
+            apiEndpoint: usesDefaultFallback ? "" : (defaults.string(forKey: apiEndpointKey) ?? ""),
+            apiKey: apiKey,
+            model: usesDefaultFallback ? "" : (defaults.string(forKey: modelKey) ?? ""),
             defaultFallbackEnabled: fallbackEnabled
         )
     }
@@ -129,10 +129,6 @@ struct TranslationSettings {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
-    private static func defaultedValue(_ value: String?, fallback: String) -> String {
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? fallback : trimmed
-    }
 }
 
 private extension String {

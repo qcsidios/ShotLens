@@ -349,6 +349,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let note = label(TranslationSettings.limitedFreeModelNotice, font: .systemFont(ofSize: 12), color: .secondaryLabelColor)
         note.lineBreakMode = .byWordWrapping
         note.maximumNumberOfLines = 0
+        note.widthAnchor.constraint(equalToConstant: 404).isActive = true
         apiDefaultNoteLabel = note
         card.addArrangedSubview(details)
         card.addArrangedSubview(note)

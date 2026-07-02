@@ -126,14 +126,18 @@ struct TranslationEndpointSmoke {
         TranslationSettings.resetSavedConfiguration()
 
         let settings = TranslationSettings.load()
-        guard settings.apiEndpoint == TranslationSettings.defaultAPIEndpoint else {
-            throw TestFailure("Expected default endpoint to load when none is saved")
+        guard settings.apiEndpoint.isEmpty else {
+            throw TestFailure("Expected default endpoint to stay out of the editable field")
         }
         guard settings.apiKey.isEmpty, settings.usesDefaultAPIKey else {
             throw TestFailure("Expected saved API key to stay hidden while using default fallback")
         }
-        guard settings.model == TranslationSettings.defaultModel else {
-            throw TestFailure("Expected default model to load when none is saved")
+        guard settings.model.isEmpty else {
+            throw TestFailure("Expected default model to stay out of the editable field")
+        }
+        guard settings.effectiveAPIEndpoint == TranslationSettings.defaultAPIEndpoint,
+              settings.effectiveModel == TranslationSettings.defaultModel else {
+            throw TestFailure("Expected hidden default endpoint and model to remain effective")
         }
 
         MockOpenAIProtocol.reset()

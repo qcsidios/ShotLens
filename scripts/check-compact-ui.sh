@@ -23,8 +23,14 @@ rg -n 'NSButton\(title: "恢复默认"' "$MAIN_WINDOW" >/dev/null
 rg -n 'NSButton\(title: "测试"' "$MAIN_WINDOW" >/dev/null
 rg -n 'apiDefaultNoteLabel' "$MAIN_WINDOW" >/dev/null
 rg -n '默认限免' "$MAIN_WINDOW" >/dev/null
-rg -n '限免政策结束后，默认限免功能将停止' "$TRANSLATION_SETTINGS" >/dev/null
-rg -n '异常消耗时可能随时停用，建议自备 Key' "$TRANSLATION_SETTINGS" >/dev/null
+rg -n '腾讯混元模型当前限免' "$TRANSLATION_SETTINGS" >/dev/null
+if rg -n '腾讯混元 MT' "$TRANSLATION_SETTINGS" >/dev/null; then
+  echo "Default API notice should use 腾讯混元模型 without MT." >&2
+  exit 1
+fi
+rg -n -F 'note.widthAnchor.constraint(equalToConstant: 404)' "$MAIN_WINDOW" >/dev/null
+rg -n -F 'note.lineBreakMode = .byWordWrapping' "$MAIN_WINDOW" >/dev/null
+rg -n -F 'note.maximumNumberOfLines = 0' "$MAIN_WINDOW" >/dev/null
 rg -n 'usesDefaultAPIKey \\|\\| !isApiDetailsExpanded' "$MAIN_WINDOW" >/dev/null
 rg -n -F 'toggleAPIButton.title = usesDefaultAPIKey ? "自备 API"' "$MAIN_WINDOW" >/dev/null
 rg -n 'scheduleAutomaticUpdateChecks' "$MAIN_WINDOW" >/dev/null
