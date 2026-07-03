@@ -405,6 +405,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        await MainActor.run {
+            ClipboardManager().copyImageToClipboard(image: captured.image)
+        }
+        ShotLensLogger.log("框选截图已保存到剪贴板")
+
         let displayScale = max(
             CGFloat(captured.image.width) / max(selection.width, 1),
             CGFloat(captured.image.height) / max(selection.height, 1),
