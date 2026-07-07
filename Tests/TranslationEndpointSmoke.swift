@@ -67,6 +67,7 @@ struct TranslationEndpointSmoke {
         )
         try await assertSingleBlockPlainTextParses()
         try await assertSingleBlockExplanationParses()
+        try await assertUnchangedSingleEnglishWordTriggersRepair()
         try await assertAbbreviationUsesSurroundingContext()
         try await assertRepairRequestFixesInvalidBatchResponse()
         try await assertPolicyLikeBatchOutputIsRepaired()
@@ -360,6 +361,29 @@ struct TranslationEndpointSmoke {
         let result = try await translator.translate(["Hello"], from: "en", to: "zh-Hans")
         guard result == ["你好"] else {
             throw TestFailure("Expected single explanation response to parse, got \(result)")
+        }
+    }
+
+    private static func assertUnchangedSingleEnglishWordTriggersRepair() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContentQueue = [
+            "Settings",
+            "设置"
+        ]
+
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+
+        let result = try await translator.translate(["Settings"], from: "en", to: "zh-Hans")
+        guard result == ["设置"] else {
+            throw TestFailure("Expected unchanged single English word to be repaired, got \(result)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 2,
+              MockOpenAIProtocol.requestBodies[1].contains("original_items:") else {
+            throw TestFailure("Expected unchanged single English word to trigger one repair request")
         }
     }
 

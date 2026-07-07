@@ -36,6 +36,15 @@ struct ClipboardManagerSmoke {
             throw TestFailure("Automatic selection copy should contain only the screenshot")
         }
 
+        let textPasteboard = NSPasteboard(name: NSPasteboard.Name("ShotLensTextClipboardTest-\(UUID().uuidString)"))
+        ClipboardManager().copyTextToClipboard("设置", pasteboard: textPasteboard)
+        guard textPasteboard.string(forType: .string) == "设置" else {
+            throw TestFailure("Text copy should write the translated Chinese text")
+        }
+        guard textPasteboard.data(forType: .png) == nil else {
+            throw TestFailure("Text-only copy should not write an image")
+        }
+
         print("Clipboard manager smoke test passed.")
     }
 }

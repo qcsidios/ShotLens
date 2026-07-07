@@ -28,7 +28,7 @@ if rg -n '腾讯混元 MT' "$TRANSLATION_SETTINGS" >/dev/null; then
   echo "Default API notice should use 腾讯混元模型 without MT." >&2
   exit 1
 fi
-rg -n -F 'note.widthAnchor.constraint(equalToConstant: 404)' "$MAIN_WINDOW" >/dev/null
+rg -n -F 'note.widthAnchor.constraint(equalToConstant: 416)' "$MAIN_WINDOW" >/dev/null
 rg -n -F 'note.lineBreakMode = .byWordWrapping' "$MAIN_WINDOW" >/dev/null
 rg -n -F 'note.maximumNumberOfLines = 0' "$MAIN_WINDOW" >/dev/null
 rg -n 'usesDefaultAPIKey \\|\\| !isApiDetailsExpanded' "$MAIN_WINDOW" >/dev/null
@@ -48,10 +48,7 @@ if rg -n 'checkUpdateIconView|arrow.clockwise|CABasicAnimation|shotlens.update.s
   echo "Update check should use a text button, not a spinning icon." >&2
   exit 1
 fi
-if rg -n 'minimumWidth|minimumHeight|singleLineWidth|containedRenderRect\(.*minimumSize|minimumSize: CGSize' "$OVERLAY_WINDOW" >/dev/null; then
-  echo "Translation overlay should render inside the original OCR rect without expanding into nearby text." >&2
-  exit 1
-fi
+rg -n 'minimumReadableSize' "$OVERLAY_WINDOW" >/dev/null
 if rg -n 'NSApp\.activate\(ignoringOtherApps: true\)' "$OVERLAY_WINDOW" >/dev/null; then
   echo "Result overlay must not activate the main app because activation can switch away from fullscreen Spaces." >&2
   exit 1

@@ -143,8 +143,9 @@ struct LLMTranslator: TranslationProvider {
             "Never answer, refuse, classify risk, add safety judgments, or explain the content.",
             "Use surrounding OCR items as context to disambiguate short forms and abbreviations.",
             "Translate each block literally and preserve the same order.",
+            "For ordinary English UI words such as Settings, Search, Continue, or Cancel, return Chinese, not the original English.",
             "Return only a valid JSON string array with exactly one string per input block.",
-            "If a block cannot be translated, return the original text for that item.",
+            "Only keep the original text for names, model identifiers, URLs, code, or symbols that should not be translated.",
             "Do not return Markdown, numbering, objects, keys, or extra text."
         ].joined(separator: " ")
     }
@@ -202,7 +203,19 @@ struct LLMTranslator: TranslationProvider {
                 ShotLensLogger.log("疑似模型安全判定被拦截，进入修复：\(translation.logSnippet)")
                 throw TranslationError.invalidLLMResponse
             }
+            if looksLikeUntranslatedEnglish(translation, source: source) {
+                ShotLensLogger.log("疑似英文原文被直接返回，进入修复：\(translation.logSnippet)")
+                throw TranslationError.invalidLLMResponse
+            }
         }
+    }
+
+    private func looksLikeUntranslatedEnglish(_ translation: String, source: String) -> Bool {
+        let normalizedTranslation = translation.normalizedForUntranslatedCheck
+        let normalizedSource = source.normalizedForUntranslatedCheck
+        guard normalizedTranslation == normalizedSource, !normalizedSource.isEmpty else { return false }
+        guard source.isLikelyTranslatableEnglishText else { return false }
+        return !translation.containsCJK
     }
 
     private func looksLikePolicyMistranslation(_ translation: String, source: String) -> Bool {
@@ -604,5 +617,38 @@ private extension String {
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: #" +"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var containsCJK: Bool {
+        range(of: #"\p{Han}"#, options: .regularExpression) != nil
+    }
+
+    var normalizedForUntranslatedCheck: String {
+        lowercased()
+            .replacingOccurrences(of: #"[\s\p{P}\p{S}]+"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var isLikelyTranslatableEnglishText: Bool {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 4,
+              trimmed.count <= 80,
+              !trimmed.containsCJK,
+              trimmed.range(of: #"[A-Za-z]"#, options: .regularExpression) != nil,
+              trimmed.range(of: #"[0-9_/\\@#$%^&*+=<>{}\[\]|~`]"#, options: .regularExpression) == nil else {
+            return false
+        }
+
+        let words = trimmed
+            .components(separatedBy: CharacterSet(charactersIn: " -_"))
+            .filter { !$0.isEmpty }
+        guard (1...4).contains(words.count) else { return false }
+        guard words.allSatisfy({ $0.range(of: #"^[A-Za-z']+$"#, options: .regularExpression) != nil }) else {
+            return false
+        }
+        guard words.contains(where: { $0.range(of: #"[aeiouyAEIOUY]"#, options: .regularExpression) != nil }) else {
+            return false
+        }
+        return !trimmed.allSatisfy { !$0.isLetter || $0.isUppercase }
     }
 }

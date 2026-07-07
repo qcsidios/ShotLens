@@ -1,6 +1,27 @@
 import AppKit
 import CoreGraphics
 
+enum OverlayGeometry {
+    static let minimumReadableSize = CGSize(width: 120, height: 44)
+
+    static func resultFrame(
+        screenshotPixelSize: CGSize,
+        screenPosition: CGPoint,
+        displayScale: CGFloat
+    ) -> CGRect {
+        let scale = max(displayScale, 1.0)
+        let imageSize = CGSize(
+            width: screenshotPixelSize.width / scale,
+            height: screenshotPixelSize.height / scale
+        )
+        let resultSize = CGSize(
+            width: max(imageSize.width, minimumReadableSize.width),
+            height: max(imageSize.height, minimumReadableSize.height)
+        )
+        return CGRect(origin: screenPosition, size: resultSize)
+    }
+}
+
 /// 原位翻译结果层：选区内显示截图与译文，选区外点击即结束本次截图。
 final class OverlayWindow: NSObject, NSWindowDelegate {
     var onDismiss: (() -> Void)?
@@ -31,11 +52,11 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
         displayScale: CGFloat
     ) {
         let scale = max(displayScale, 1.0)
-        let windowSize = CGSize(
-            width: CGFloat(croppedScreenshot.width) / scale,
-            height: CGFloat(croppedScreenshot.height) / scale
+        let windowRect = OverlayGeometry.resultFrame(
+            screenshotPixelSize: CGSize(width: croppedScreenshot.width, height: croppedScreenshot.height),
+            screenPosition: screenPosition,
+            displayScale: scale
         )
-        let windowRect = CGRect(origin: screenPosition, size: windowSize)
 
         backdropWindows = makeBackdropWindows()
         startOutsideClickMonitor()
@@ -59,7 +80,7 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
             self?.dismiss()
         }
 
-        let contentView = OverlayContentView(frame: NSRect(origin: .zero, size: windowSize))
+        let contentView = OverlayContentView(frame: NSRect(origin: .zero, size: windowRect.size))
         contentView.screenshot = croppedScreenshot
         contentView.displayScale = scale
         window.contentView = contentView
@@ -236,6 +257,16 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
     }
 
     @MainActor
+    private func copyTranslatedTextToClipboard() {
+        guard let contentView else { return }
+        let text = contentView.translatedBlocks
+            .map(\.translatedText)
+            .joined(separator: "\n")
+        ClipboardManager().copyTextToClipboard(text)
+        setToggleStatus(message: "已复制译文")
+    }
+
+    @MainActor
     private func setToggleStatus(message: String) {
         statusWindow?.setToggle(
             message: message,
@@ -256,6 +287,9 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
             return
         }
         let window = OverlaySaveWindow(statusFrame: statusWindow.frame)
+        window.onCopyText = { [weak self] in
+            self?.copyTranslatedTextToClipboard()
+        }
         window.onSave = { [weak self] in
             self?.copyCurrentSnapshotToClipboard()
         }
@@ -345,11 +379,15 @@ private final class OverlayStatusWindow: NSPanel {
 }
 
 private final class OverlaySaveWindow: NSPanel {
+    var onCopyText: (() -> Void)? {
+        didSet { saveView.onCopyText = onCopyText }
+    }
+
     var onSave: (() -> Void)? {
         didSet { saveView.onSave = onSave }
     }
 
-    private let saveView = StatusSaveButton(frame: CGRect(x: 0, y: 0, width: 28, height: 28))
+    private let saveView = StatusActionButtonsView(frame: CGRect(x: 0, y: 0, width: 64, height: 28))
 
     init(statusFrame: CGRect) {
         super.init(
@@ -377,7 +415,7 @@ private final class OverlaySaveWindow: NSPanel {
 
     private static func frame(for statusFrame: CGRect) -> CGRect {
         let gap: CGFloat = 8
-        let size = CGSize(width: 28, height: 28)
+        let size = CGSize(width: 64, height: 28)
         let screenFrame = NSScreen.screens.first { $0.frame.intersects(statusFrame) }?.visibleFrame
             ?? NSScreen.main?.visibleFrame
             ?? statusFrame
@@ -508,6 +546,66 @@ private final class StatusRetryButton: NSControl {
 
     override func mouseDown(with event: NSEvent) {
         onClick?()
+    }
+}
+
+private final class StatusActionButtonsView: NSView {
+    var onCopyText: (() -> Void)? {
+        didSet { copyTextButton.onCopyText = onCopyText }
+    }
+
+    var onSave: (() -> Void)? {
+        didSet { saveButton.onSave = onSave }
+    }
+
+    private let copyTextButton = StatusCopyTextButton(frame: CGRect(x: 0, y: 0, width: 28, height: 28))
+    private let saveButton = StatusSaveButton(frame: CGRect(x: 36, y: 0, width: 28, height: 28))
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        addSubview(copyTextButton)
+        addSubview(saveButton)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        copyTextButton.frame = CGRect(x: 0, y: 0, width: 28, height: 28)
+        saveButton.frame = CGRect(x: bounds.maxX - 28, y: 0, width: 28, height: 28)
+    }
+}
+
+private final class StatusCopyTextButton: NSControl {
+    var onCopyText: (() -> Void)?
+
+    override var isOpaque: Bool { false }
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.systemBlue.setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7).fill()
+        drawCopyIcon()
+    }
+
+    private func drawCopyIcon() {
+        NSColor.white.setStroke()
+        let back = NSBezierPath(roundedRect: CGRect(x: bounds.midX - 5, y: bounds.midY - 3, width: 9, height: 10), xRadius: 2, yRadius: 2)
+        back.lineWidth = 1.7
+        back.stroke()
+        let front = NSBezierPath(roundedRect: CGRect(x: bounds.midX - 2, y: bounds.midY - 6, width: 9, height: 10), xRadius: 2, yRadius: 2)
+        front.lineWidth = 1.7
+        front.stroke()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onCopyText?()
     }
 }
 
@@ -736,10 +834,24 @@ final class OverlayContentView: NSView {
     }
 
     private func containedRenderRect(for baseRect: CGRect) -> CGRect {
-        let minX = max(bounds.minX, floor(baseRect.minX))
-        let minY = max(bounds.minY, floor(baseRect.minY))
-        let maxX = min(bounds.maxX, ceil(baseRect.maxX))
-        let maxY = min(bounds.maxY, ceil(baseRect.maxY))
+        let readableWidth = min(bounds.width, max(baseRect.width, OverlayGeometry.minimumReadableSize.width))
+        let readableHeight = min(bounds.height, max(baseRect.height, OverlayGeometry.minimumReadableSize.height))
+        let proposed = CGRect(
+            x: baseRect.midX - readableWidth / 2,
+            y: baseRect.midY - readableHeight / 2,
+            width: readableWidth,
+            height: readableHeight
+        )
+        let shifted = CGRect(
+            x: min(max(bounds.minX, floor(proposed.minX)), max(bounds.minX, bounds.maxX - proposed.width)),
+            y: min(max(bounds.minY, floor(proposed.minY)), max(bounds.minY, bounds.maxY - proposed.height)),
+            width: proposed.width,
+            height: proposed.height
+        )
+        let minX = max(bounds.minX, floor(shifted.minX))
+        let minY = max(bounds.minY, floor(shifted.minY))
+        let maxX = min(bounds.maxX, ceil(shifted.maxX))
+        let maxY = min(bounds.maxY, ceil(shifted.maxY))
         return CGRect(
             x: minX,
             y: minY,

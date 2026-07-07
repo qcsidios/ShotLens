@@ -30,4 +30,10 @@ struct ClipboardManager {
         // 写入纯文本（用户粘贴到备忘录、聊天等场景）
         pasteboard.setString(text, forType: .string)
     }
+
+    /// 只复制译文文本，不写入图片。
+    func copyTextToClipboard(_ text: String, pasteboard: NSPasteboard = .general) {
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
 }
