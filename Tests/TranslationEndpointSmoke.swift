@@ -67,7 +67,9 @@ struct TranslationEndpointSmoke {
         )
         try await assertSingleBlockPlainTextParses()
         try await assertSingleBlockExplanationParses()
-        try await assertUnchangedSingleEnglishWordTriggersRepair()
+        try await assertUnchangedSingleEnglishWordUsesLocalFallback()
+        try await assertEchoedRepairPromptDoesNotRenderAsTranslation()
+        try await assertLabeledSingleTranslationExtractsChinese()
         try await assertAbbreviationUsesSurroundingContext()
         try await assertRepairRequestFixesInvalidBatchResponse()
         try await assertPolicyLikeBatchOutputIsRepaired()
@@ -364,10 +366,29 @@ struct TranslationEndpointSmoke {
         }
     }
 
-    private static func assertUnchangedSingleEnglishWordTriggersRepair() async throws {
+    private static func assertUnchangedSingleEnglishWordUsesLocalFallback() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = "Settings"
+
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+
+        let result = try await translator.translate(["Settings"], from: "en", to: "zh-Hans")
+        guard result == ["设置"] else {
+            throw TestFailure("Expected unchanged single English word to use local fallback, got \(result)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 1 else {
+            throw TestFailure("Expected local fallback to avoid a repair request, got \(MockOpenAIProtocol.requestBodies.count) requests")
+        }
+    }
+
+    private static func assertEchoedRepairPromptDoesNotRenderAsTranslation() async throws {
         MockOpenAIProtocol.reset()
         MockOpenAIProtocol.assistantContentQueue = [
-            "Settings",
+            "target=zh-Hans\noriginal_items:\n0\tSettings\nConvert this model output to JSON string array only:\n设置",
             "设置"
         ]
 
@@ -379,11 +400,26 @@ struct TranslationEndpointSmoke {
 
         let result = try await translator.translate(["Settings"], from: "en", to: "zh-Hans")
         guard result == ["设置"] else {
-            throw TestFailure("Expected unchanged single English word to be repaired, got \(result)")
+            throw TestFailure("Expected echoed repair prompt garbage to be repaired away, got \(result)")
         }
-        guard MockOpenAIProtocol.requestBodies.count == 2,
-              MockOpenAIProtocol.requestBodies[1].contains("original_items:") else {
-            throw TestFailure("Expected unchanged single English word to trigger one repair request")
+        guard MockOpenAIProtocol.requestBodies.count == 2 else {
+            throw TestFailure("Expected echoed repair prompt garbage to trigger one repair request")
+        }
+    }
+
+    private static func assertLabeledSingleTranslationExtractsChinese() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = "原文：Settings\n译文：设置"
+
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+
+        let result = try await translator.translate(["Settings"], from: "en", to: "zh-Hans")
+        guard result == ["设置"] else {
+            throw TestFailure("Expected labeled single translation to extract only Chinese, got \(result)")
         }
     }
 

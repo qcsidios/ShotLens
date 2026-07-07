@@ -18,3 +18,5 @@ swiftc \
 rg -n -F 'let sourceLang = "en"' "$ROOT_DIR/ShotLens/App/ShotLensApp.swift" >/dev/null
 rg -n -F 'let targetLang = "zh-Hans"' "$ROOT_DIR/ShotLens/App/ShotLensApp.swift" >/dev/null
 rg -n -F 'request.recognitionLanguages = ["en-US"]' "$ROOT_DIR/ShotLens/Tools/ShotLensOCR.swift" >/dev/null
+rg -n -F 'request.usesLanguageCorrection = false' "$ROOT_DIR/ShotLens/Tools/ShotLensOCR.swift" >/dev/null
+rg -n -F 'request.customWords = [' "$ROOT_DIR/ShotLens/Tools/ShotLensOCR.swift" >/dev/null

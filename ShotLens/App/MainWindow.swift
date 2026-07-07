@@ -98,7 +98,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
 
     private func makeWindow() -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 496, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 548),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -107,7 +107,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         window.isReleasedWhenClosed = false
         window.animationBehavior = .none
 
-        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 496, height: 560))
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 548))
         contentView.wantsLayer = true
         contentView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         window.contentView = contentView
@@ -145,7 +145,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 12
-        row.widthAnchor.constraint(equalToConstant: 448).isActive = true
+        row.widthAnchor.constraint(equalToConstant: 432).isActive = true
 
         let icon = ShotLensGlyphIconView(frame: NSRect(x: 0, y: 0, width: 44, height: 44))
         icon.widthAnchor.constraint(equalToConstant: 44).isActive = true
@@ -296,7 +296,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         headerRow.orientation = .horizontal
         headerRow.alignment = .centerY
         headerRow.spacing = 10
-        headerRow.widthAnchor.constraint(equalToConstant: 416).isActive = true
+        headerRow.widthAnchor.constraint(equalToConstant: 400).isActive = true
 
         headerRow.addArrangedSubview(label("API 信息", font: .systemFont(ofSize: 15, weight: .semibold)))
         let spacer = NSView()
@@ -320,14 +320,14 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         details.alignment = .leading
         details.distribution = .fill
         details.spacing = 8
-        details.widthAnchor.constraint(equalToConstant: 416).isActive = true
+        details.widthAnchor.constraint(equalToConstant: 400).isActive = true
         apiDetailsContainer = details
 
         let actionRow = NSStackView()
         actionRow.orientation = .horizontal
         actionRow.alignment = .centerY
         actionRow.spacing = 8
-        actionRow.widthAnchor.constraint(equalToConstant: 416).isActive = true
+        actionRow.widthAnchor.constraint(equalToConstant: 400).isActive = true
         let actionSpacer = NSView()
         actionSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let clearButton = NSButton(title: "清空", target: self, action: #selector(clearAPISettingsClicked))
@@ -352,7 +352,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let note = label(TranslationSettings.limitedFreeModelNotice, font: .systemFont(ofSize: 12), color: .secondaryLabelColor)
         note.lineBreakMode = .byWordWrapping
         note.maximumNumberOfLines = 0
-        note.widthAnchor.constraint(equalToConstant: 416).isActive = true
+        note.widthAnchor.constraint(equalToConstant: 400).isActive = true
         apiDefaultNoteLabel = note
         card.addArrangedSubview(details)
         card.addArrangedSubview(note)
@@ -364,7 +364,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 10
-        row.widthAnchor.constraint(equalToConstant: 448).isActive = true
+        row.widthAnchor.constraint(equalToConstant: 432).isActive = true
 
         let hint = label("设置会自动保存", font: .systemFont(ofSize: 12), color: .secondaryLabelColor)
         let spacer = NSView()
@@ -392,7 +392,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         card.layer?.cornerRadius = 8
         card.layer?.borderWidth = 1
         card.layer?.borderColor = NSColor.separatorColor.cgColor
-        card.widthAnchor.constraint(equalToConstant: 448).isActive = true
+        card.widthAnchor.constraint(equalToConstant: 432).isActive = true
         return card
     }
 
@@ -409,7 +409,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 10
-        row.widthAnchor.constraint(equalToConstant: 416).isActive = true
+        row.widthAnchor.constraint(equalToConstant: 400).isActive = true
 
         let titleLabel = label("Key", font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
         titleLabel.widthAnchor.constraint(equalToConstant: 38).isActive = true
@@ -424,17 +424,17 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         apiKeyField.lineBreakMode = .byTruncatingTail
         apiKeyField.translatesAutoresizingMaskIntoConstraints = false
 
-        // 外层容器 356×28
+        // 外层容器 352×28
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
-        container.widthAnchor.constraint(equalToConstant: 368).isActive = true
+        container.widthAnchor.constraint(equalToConstant: 352).isActive = true
         container.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
-        // 文本框 328，眼图标间距 6
+        // 文本框 324，眼图标间距 6
         container.addSubview(apiKeyField)
         NSLayoutConstraint.activate([
             apiKeyField.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            apiKeyField.widthAnchor.constraint(equalToConstant: 340),
+            apiKeyField.widthAnchor.constraint(equalToConstant: 324),
             apiKeyField.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             apiKeyField.heightAnchor.constraint(equalToConstant: 28),
         ])
@@ -495,23 +495,23 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 10
-        row.widthAnchor.constraint(equalToConstant: 416).isActive = true
+        row.widthAnchor.constraint(equalToConstant: 400).isActive = true
 
         let titleLabel = label("模型", font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
         titleLabel.widthAnchor.constraint(equalToConstant: 38).isActive = true
 
-        // 外层容器 356×28
+        // 外层容器 352×28
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
-        container.widthAnchor.constraint(equalToConstant: 368).isActive = true
+        container.widthAnchor.constraint(equalToConstant: 352).isActive = true
         container.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
-        // 文本框 328，箭头在右侧间距 6
+        // 文本框 324，箭头在右侧间距 6
         modelField.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(modelField)
         NSLayoutConstraint.activate([
             modelField.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            modelField.widthAnchor.constraint(equalToConstant: 340),
+            modelField.widthAnchor.constraint(equalToConstant: 324),
             modelField.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             modelField.heightAnchor.constraint(equalToConstant: 28),
         ])
@@ -543,11 +543,11 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 10
-        row.widthAnchor.constraint(equalToConstant: 416).isActive = true
+        row.widthAnchor.constraint(equalToConstant: 400).isActive = true
 
         let titleLabel = label(title, font: .systemFont(ofSize: 13), color: .secondaryLabelColor)
         titleLabel.widthAnchor.constraint(equalToConstant: 38).isActive = true
-        field.widthAnchor.constraint(equalToConstant: 368).isActive = true
+        field.widthAnchor.constraint(equalToConstant: 352).isActive = true
 
         row.addArrangedSubview(titleLabel)
         row.addArrangedSubview(field)
@@ -570,7 +570,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private func updateWindowHeight(animated: Bool) {
         guard let window else { return }
         let settings = currentDraftSettings()
-        let targetHeight: CGFloat = settings.usesDefaultAPIKey ? 455 : (isApiDetailsExpanded ? 560 : 430)
+        let targetHeight: CGFloat = settings.usesDefaultAPIKey ? 444 : (isApiDetailsExpanded ? 548 : 420)
         var frame = window.frame
         guard abs(frame.height - targetHeight) > 0.5 else { return }
         frame.origin.y += frame.height - targetHeight

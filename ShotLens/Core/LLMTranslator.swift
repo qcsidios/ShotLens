@@ -5,6 +5,34 @@ struct LLMTranslator: TranslationProvider {
     let settings: TranslationSettings
     private let maxBatchItemCount = 20
     private let maxBatchCharacterCount = 6000
+    private static let deterministicUITranslations = [
+        "settings": "设置",
+        "search": "搜索",
+        "continue": "继续",
+        "cancel": "取消",
+        "copy": "复制",
+        "save": "保存",
+        "close": "关闭",
+        "open": "打开",
+        "done": "完成",
+        "retry": "重试",
+        "edit": "编辑",
+        "delete": "删除",
+        "download": "下载",
+        "upload": "上传",
+        "next": "下一步",
+        "previous": "上一步",
+        "back": "返回",
+        "login": "登录",
+        "log in": "登录",
+        "sign in": "登录",
+        "sign up": "注册",
+        "submit": "提交",
+        "apply": "应用",
+        "ok": "确定",
+        "yes": "是",
+        "no": "否"
+    ]
 
     func translate(_ texts: [String], from sourceLanguage: String, to targetLanguage: String) async throws -> [String] {
         guard !texts.isEmpty else { return [] }
@@ -188,9 +216,26 @@ struct LLMTranslator: TranslationProvider {
     }
 
     private func parseValidatedTranslations(from content: String, expectedCount: Int, sources: [String]) throws -> [String] {
-        let values = try parseTranslations(from: content, expectedCount: expectedCount)
+        let values = applyDeterministicFallbacks(
+            to: try parseTranslations(from: content, expectedCount: expectedCount),
+            sources: sources
+        )
         try validateTranslations(values, sources: sources)
         return values
+    }
+
+    private func applyDeterministicFallbacks(to translations: [String], sources: [String]) -> [String] {
+        zip(translations, sources).map { translation, source in
+            if looksLikeUntranslatedEnglish(translation, source: source),
+               let fallback = deterministicUITranslation(for: source) {
+                return fallback
+            }
+            return translation
+        }
+    }
+
+    private func deterministicUITranslation(for source: String) -> String? {
+        Self.deterministicUITranslations[source.normalizedUIKey]
     }
 
     private func validateTranslations(_ translations: [String], sources: [String]) throws {
@@ -339,6 +384,9 @@ struct LLMTranslator: TranslationProvider {
 
         if let values = parseStructuredJSONIfPresent(from: content), values.count == expectedCount {
             return values
+        }
+        if looksLikeModelArtifact(content) {
+            throw TranslationError.invalidLLMResponse
         }
         if let lines = parseNumberedLines(from: content, expectedCount: expectedCount) {
             return lines
@@ -511,6 +559,7 @@ struct LLMTranslator: TranslationProvider {
     private func parseSinglePlainText(from content: String) -> String? {
         guard let text = bestEffortSingleTranslation(from: content) else { return nil }
         guard !text.isEmpty,
+              !looksLikeModelArtifact(text),
               !looksLikeExplanation(text) else {
             return nil
         }
@@ -520,6 +569,10 @@ struct LLMTranslator: TranslationProvider {
     private func bestEffortSingleTranslation(from content: String) -> String? {
         let cleaned = content.strippingCodeFence.cleanedTranslationText
         guard !cleaned.isEmpty else { return nil }
+        if let labeled = cleaned.labeledSingleTranslation {
+            return labeled
+        }
+        guard !looksLikeModelArtifact(cleaned) else { return nil }
         if !cleaned.contains("\n") {
             return cleaned
         }
@@ -550,6 +603,22 @@ struct LLMTranslator: TranslationProvider {
             || lowercased.hasPrefix("sure")
             || lowercased.hasPrefix("translation")
             || lowercased.contains("=>")
+    }
+
+    private func looksLikeModelArtifact(_ text: String) -> Bool {
+        let lowercased = text.lowercased()
+        let fragments = [
+            "original_items:",
+            "expected_count=",
+            "target=zh-hans",
+            "source=en",
+            "format=index",
+            "convert this model output",
+            "json string array",
+            "<think>",
+            "</think>"
+        ]
+        return fragments.contains { lowercased.contains($0) }
     }
 }
 
@@ -629,6 +698,12 @@ private extension String {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var normalizedUIKey: String {
+        lowercased()
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
+    }
+
     var isLikelyTranslatableEnglishText: Bool {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 4,
@@ -650,5 +725,34 @@ private extension String {
             return false
         }
         return !trimmed.allSatisfy { !$0.isLetter || $0.isUppercase }
+    }
+
+    var labeledSingleTranslation: String? {
+        let lines = components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard lines.count >= 2 else { return nil }
+
+        let patterns = [
+            #"^(?:译文|翻译|translated\s+text|translation)\s*[:：]\s*(.+)$"#
+        ]
+        for line in lines.reversed() {
+            for pattern in patterns {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                    continue
+                }
+                let nsLine = line as NSString
+                let range = NSRange(location: 0, length: nsLine.length)
+                guard let match = regex.firstMatch(in: line, range: range),
+                      match.numberOfRanges == 2 else {
+                    continue
+                }
+                let value = nsLine.substring(with: match.range(at: 1)).cleanedTranslationText
+                if !value.isEmpty {
+                    return value
+                }
+            }
+        }
+        return nil
     }
 }

@@ -28,7 +28,9 @@ if rg -n '腾讯混元 MT' "$TRANSLATION_SETTINGS" >/dev/null; then
   echo "Default API notice should use 腾讯混元模型 without MT." >&2
   exit 1
 fi
-rg -n -F 'note.widthAnchor.constraint(equalToConstant: 416)' "$MAIN_WINDOW" >/dev/null
+rg -n -F 'contentRect: NSRect(x: 0, y: 0, width: 480, height: 548)' "$MAIN_WINDOW" >/dev/null
+rg -n -F 'row.widthAnchor.constraint(equalToConstant: 432)' "$MAIN_WINDOW" >/dev/null
+rg -n -F 'note.widthAnchor.constraint(equalToConstant: 400)' "$MAIN_WINDOW" >/dev/null
 rg -n -F 'note.lineBreakMode = .byWordWrapping' "$MAIN_WINDOW" >/dev/null
 rg -n -F 'note.maximumNumberOfLines = 0' "$MAIN_WINDOW" >/dev/null
 rg -n 'usesDefaultAPIKey \\|\\| !isApiDetailsExpanded' "$MAIN_WINDOW" >/dev/null

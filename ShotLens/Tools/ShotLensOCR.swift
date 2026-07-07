@@ -34,9 +34,26 @@ struct ShotLensOCR {
 
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
+        request.usesLanguageCorrection = false
         request.minimumTextHeight = 0
         request.recognitionLanguages = ["en-US"]
+        request.customWords = [
+            "AI",
+            "API",
+            "OCR",
+            "JSON",
+            "GitHub",
+            "ChatGPT",
+            "Claude",
+            "Settings",
+            "Search",
+            "Continue",
+            "Cancel",
+            "Copy",
+            "Save",
+            "Download",
+            "Upload"
+        ]
 
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
         try handler.perform([request])
