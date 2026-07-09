@@ -59,6 +59,7 @@ source_paths=(
 artifact_paths=(
   "$APP_BUNDLE"
   "$ROOT_DIR/build/release/dmg-staging/ShotLens.app"
+  "$DMG_PATH"
 )
 
 check_literal_absent "API endpoint" "$api_endpoint" "${source_paths[@]}" "${artifact_paths[@]}"
@@ -68,7 +69,7 @@ for path in "${source_paths[@]}" "${artifact_paths[@]}"; do
   check_secret_pattern_absent "$path"
 done
 
-if [[ -f "$DMG_PATH" ]]; then
+if [[ -f "$DMG_PATH" && "${SHOTLENS_ENABLE_DMG_MOUNT_CHECK:-0}" == "1" ]]; then
   mount_dir="$(mktemp -d)"
   cleanup() {
     hdiutil detach "$mount_dir" -quiet 2>/dev/null || true

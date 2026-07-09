@@ -4,12 +4,12 @@ import Foundation
 @main
 struct OverlayGeometrySmoke {
     static func main() throws {
-        try assertTinySelectionGetsReadableResultSize()
+        try assertTinySelectionKeepsCapturedAspectRatio()
 
         print("Overlay geometry smoke test passed.")
     }
 
-    private static func assertTinySelectionGetsReadableResultSize() throws {
+    private static func assertTinySelectionKeepsCapturedAspectRatio() throws {
         let screenshotSize = CGSize(width: 34, height: 16)
         let result = OverlayGeometry.resultFrame(
             screenshotPixelSize: screenshotSize,
@@ -17,11 +17,11 @@ struct OverlayGeometrySmoke {
             displayScale: 1
         )
 
-        guard result.width >= 120, result.height >= 44 else {
-            throw TestFailure("Expected tiny selections to expand to a readable overlay size, got \(result.size)")
+        guard result.size == screenshotSize else {
+            throw TestFailure("Expected tiny selections to preserve the selected screenshot size, got \(result.size)")
         }
         guard result.origin == CGPoint(x: 100, y: 100) else {
-            throw TestFailure("Expected expanded overlay to keep the selected top-left anchor, got \(result.origin)")
+            throw TestFailure("Expected overlay to keep the selected top-left anchor, got \(result.origin)")
         }
     }
 }

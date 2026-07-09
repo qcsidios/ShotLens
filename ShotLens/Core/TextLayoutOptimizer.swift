@@ -231,7 +231,7 @@ private extension TextBlock {
     func trimmingText() -> TextBlock {
         let normalizedText = text
             .trimmingCharacters(in: .whitespacesAndNewlines)
-            .removingLeadingIconNoise()
+            .removingOCRSymbolNoise()
         return TextBlock(
             text: normalizedText,
             boundingBox: boundingBox,
@@ -314,10 +314,10 @@ private extension String {
         return textScalars.isEmpty
     }
 
-    func removingLeadingIconNoise() -> String {
+    func removingOCRSymbolNoise() -> String {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         guard let firstSpace = trimmed.firstIndex(where: { $0.isWhitespace }) else {
-            return trimmed
+            return trimmed.removingEdgeOCRSymbolNoise()
         }
 
         let prefix = String(trimmed[..<firstSpace]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -326,9 +326,32 @@ private extension String {
               !suffix.isEmpty,
               suffix.looksLikeReadableLabel,
               prefix.looksLikeIconNoisePrefix else {
-            return trimmed
+            return trimmed.removingEdgeOCRSymbolNoise()
         }
         return suffix
+    }
+
+    func removingEdgeOCRSymbolNoise() -> String {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        var scalars = Array(unicodeScalars)
+        var removedNoise = false
+
+        while let first = scalars.first, first.isOCRNoiseScalar {
+            scalars.removeFirst()
+            removedNoise = true
+        }
+        while let last = scalars.last, last.isOCRNoiseScalar {
+            scalars.removeLast()
+            removedNoise = true
+        }
+
+        let cleaned = String(String.UnicodeScalarView(scalars))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard removedNoise,
+              cleaned.looksLikeReadableLabel else {
+            return trimmedCount <= 48 ? trimmed : self
+        }
+        return cleaned
     }
 
     var looksLikeIconNoisePrefix: Bool {
@@ -354,5 +377,15 @@ private extension String {
                 || (0x3040...0x30FF).contains(Int($0.value))
                 || (0xAC00...0xD7AF).contains(Int($0.value))
         }
+    }
+}
+
+private extension Unicode.Scalar {
+    var isOCRNoiseScalar: Bool {
+        CharacterSet.punctuationCharacters.contains(self)
+            || CharacterSet.symbols.contains(self)
+            || (0xE000...0xF8FF).contains(Int(value))
+            || (0xF0000...0xFFFFD).contains(Int(value))
+            || (0x100000...0x10FFFD).contains(Int(value))
     }
 }

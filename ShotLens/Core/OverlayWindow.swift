@@ -14,11 +14,7 @@ enum OverlayGeometry {
             width: screenshotPixelSize.width / scale,
             height: screenshotPixelSize.height / scale
         )
-        let resultSize = CGSize(
-            width: max(imageSize.width, minimumReadableSize.width),
-            height: max(imageSize.height, minimumReadableSize.height)
-        )
-        return CGRect(origin: screenPosition, size: resultSize)
+        return CGRect(origin: screenPosition, size: imageSize)
     }
 }
 

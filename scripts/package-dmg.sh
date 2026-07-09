@@ -14,6 +14,7 @@ fi
 
 APP_VERSION="$SHOTLENS_APP_VERSION"
 DMG_PATH="$BUILD_DIR/ShotLens-$APP_VERSION.dmg"
+RAW_DMG_PATH="$BUILD_DIR/ShotLens-$APP_VERSION.raw.dmg"
 
 if [[ ! "$APP_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "Release version must use three-part semver like v1.1.0, got: $APP_VERSION" >&2
@@ -36,12 +37,13 @@ APP_PATH="$STAGING_DIR/$APP_NAME.app"
 "$ROOT_DIR/scripts/check-dmg-layout.sh" "$STAGING_DIR"
 
 rm -f "$DMG_PATH"
-hdiutil create \
-  -volname "ShotLens $APP_VERSION" \
-  -srcfolder "$STAGING_DIR" \
-  -ov \
-  -format UDZO \
-  "$DMG_PATH" >/dev/null
+hdiutil makehybrid \
+  -hfs \
+  -hfs-volume-name "ShotLens $APP_VERSION" \
+  -o "$RAW_DMG_PATH" \
+  "$STAGING_DIR" >/dev/null
+hdiutil convert "$RAW_DMG_PATH" -format UDZO -o "$DMG_PATH" >/dev/null
+rm -f "$RAW_DMG_PATH"
 hdiutil verify "$DMG_PATH" >/dev/null
 xattr -cr "$DMG_PATH" 2>/dev/null || true
 "$ROOT_DIR/scripts/check-no-private-config.sh" "$DMG_PATH" "$APP_PATH"

@@ -7,6 +7,7 @@ struct TextLayoutOptimizerSmoke {
         try assertIsolatedShortWordSurvives()
         try assertLongerContentSurvives()
         try assertLikelyIconStillFiltersFromMultipleBlocks()
+        try assertLeadingSymbolNoiseIsRemovedFromLabels()
 
         print("Text layout optimizer smoke test passed.")
     }
@@ -59,6 +60,28 @@ struct TextLayoutOptimizerSmoke {
         let result = TextLayoutOptimizer.merge([iconLike, label])
         guard result.map(\.text) == ["Settings"] else {
             throw TestFailure("Expected icon filtering to remain active in multi-block layouts, got \(result.map(\.text))")
+        }
+    }
+
+    private static func assertLeadingSymbolNoiseIsRemovedFromLabels() throws {
+        let samples = [
+            TextBlock(
+                text: "…Settings",
+                boundingBox: CGRect(x: 0, y: 0, width: 86, height: 18),
+                detectedLanguage: "en",
+                visualStyle: style(confidence: 0.9, fontSize: 16)
+            ),
+            TextBlock(
+                text: "􀆅 Search",
+                boundingBox: CGRect(x: 0, y: 24, width: 78, height: 18),
+                detectedLanguage: "en",
+                visualStyle: style(confidence: 0.9, fontSize: 16)
+            )
+        ]
+
+        let result = TextLayoutOptimizer.merge(samples)
+        guard result.map(\.text) == ["Settings", "Search"] else {
+            throw TestFailure("Expected OCR symbol noise to be stripped from labels, got \(result.map(\.text))")
         }
     }
 

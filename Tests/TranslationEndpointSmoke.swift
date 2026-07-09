@@ -68,6 +68,7 @@ struct TranslationEndpointSmoke {
         try await assertSingleBlockPlainTextParses()
         try await assertSingleBlockExplanationParses()
         try await assertUnchangedSingleEnglishWordUsesLocalFallback()
+        try await assertCommonShortUIWordUsesLocalFallback()
         try await assertEchoedRepairPromptDoesNotRenderAsTranslation()
         try await assertLabeledSingleTranslationExtractsChinese()
         try await assertAbbreviationUsesSurroundingContext()
@@ -379,6 +380,25 @@ struct TranslationEndpointSmoke {
         let result = try await translator.translate(["Settings"], from: "en", to: "zh-Hans")
         guard result == ["设置"] else {
             throw TestFailure("Expected unchanged single English word to use local fallback, got \(result)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 1 else {
+            throw TestFailure("Expected local fallback to avoid a repair request, got \(MockOpenAIProtocol.requestBodies.count) requests")
+        }
+    }
+
+    private static func assertCommonShortUIWordUsesLocalFallback() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = "Pricing"
+
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+
+        let result = try await translator.translate(["Pricing"], from: "en", to: "zh-Hans")
+        guard result == ["价格"] else {
+            throw TestFailure("Expected unchanged common UI word to use local fallback, got \(result)")
         }
         guard MockOpenAIProtocol.requestBodies.count == 1 else {
             throw TestFailure("Expected local fallback to avoid a repair request, got \(MockOpenAIProtocol.requestBodies.count) requests")
