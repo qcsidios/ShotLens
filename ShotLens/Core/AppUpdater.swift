@@ -151,29 +151,87 @@ struct AppUpdater {
         return parts.compactMap { Int($0) }
     }
 
-    private static let updaterScript = """
+    static let updaterScript = """
     #!/usr/bin/env bash
     set -euo pipefail
 
     APP_PATH="$1"
     DMG_PATH="$2"
+    LOG_PATH="${TMPDIR:-/tmp}/shotlens-updater.log"
+    APP_PARENT="$(dirname "$APP_PATH")"
+    UPDATE_ID="$$-$(date +%s)"
+    STAGING_APP="$APP_PARENT/.ShotLens-update-$UPDATE_ID.app"
+    BACKUP_APP="$APP_PARENT/.ShotLens-backup-$UPDATE_ID.app"
 
-    sleep 1
+    log() {
+      printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_PATH"
+    }
+
+    log "start app=$APP_PATH dmg=$DMG_PATH"
+    case "$APP_PATH" in
+      *.app) ;;
+      *) log "target is not an app bundle"; exit 1 ;;
+    esac
+    test -d "$APP_PATH"
+    test -w "$APP_PARENT"
+    APP_EXECUTABLE="$APP_PATH/Contents/MacOS/ShotLens"
+    for _ in $(seq 1 40); do
+      if ! pgrep -f "$APP_EXECUTABLE" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.25
+    done
+    if pgrep -f "$APP_EXECUTABLE" >/dev/null 2>&1; then
+      log "old app process still running"
+      exit 1
+    fi
+
     MOUNT_DIR="$(mktemp -d)"
     cleanup() {
       hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || true
       rmdir "$MOUNT_DIR" 2>/dev/null || true
+      rm -rf "$STAGING_APP" 2>/dev/null || true
     }
     trap cleanup EXIT
+
+    restore_backup() {
+      log "restoring previous app"
+      rm -rf "$APP_PATH" 2>/dev/null || true
+      if ! mv "$BACKUP_APP" "$APP_PATH"; then
+        log "restore failed; backup retained at $BACKUP_APP"
+        return 1
+      fi
+    }
 
     hdiutil attach "$DMG_PATH" -nobrowse -readonly -mountpoint "$MOUNT_DIR" >/dev/null
     SOURCE_APP="$MOUNT_DIR/ShotLens.app"
     test -d "$SOURCE_APP"
+    test -x "$SOURCE_APP/Contents/MacOS/ShotLens"
 
-    rm -rf "$APP_PATH"
-    ditto "$SOURCE_APP" "$APP_PATH"
+    CURRENT_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
+    NEW_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$SOURCE_APP/Contents/Info.plist")"
+    test -n "$CURRENT_BUNDLE_ID"
+    test "$CURRENT_BUNDLE_ID" = "$NEW_BUNDLE_ID"
+    /usr/bin/codesign --verify --deep --strict "$SOURCE_APP"
+
+    log "staging app"
+    ditto "$SOURCE_APP" "$STAGING_APP"
+    test -x "$STAGING_APP/Contents/MacOS/ShotLens"
+    mv "$APP_PATH" "$BACKUP_APP"
+    if ! mv "$STAGING_APP" "$APP_PATH"; then
+      restore_backup
+      exit 1
+    fi
     xattr -dr com.apple.quarantine "$APP_PATH" 2>/dev/null || true
-    open "$APP_PATH"
+    log "launching app"
+    if ! /usr/bin/open -n "$APP_PATH"; then
+      restore_backup
+      /usr/bin/open -n "$APP_PATH" 2>/dev/null || true
+      exit 1
+    fi
+    rm -rf "$BACKUP_APP"
+    rm -f "$DMG_PATH"
+    log "update complete"
     """
 
     private struct GitHubRelease: Decodable {

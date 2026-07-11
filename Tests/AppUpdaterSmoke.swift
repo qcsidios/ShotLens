@@ -12,8 +12,21 @@ struct AppUpdaterSmoke {
         try await assertMissingDMGIsUnavailable(session: session)
         try await assertInvalidTagIsUnavailable(session: session)
         try assertAutomaticCheckSchedule()
+        try assertInstallerUsesStagingAndRollback()
 
         print("App updater smoke test passed.")
+    }
+
+    private static func assertInstallerUsesStagingAndRollback() throws {
+        let script = AppUpdater.updaterScript
+        for required in ["STAGING_APP=", "BACKUP_APP=", "codesign --verify", "CFBundleIdentifier", "restore_backup", "ditto \"$SOURCE_APP\" \"$STAGING_APP\""] {
+            guard script.contains(required) else {
+                throw TestFailure("Expected updater rollback contract to contain: \(required)")
+            }
+        }
+        guard !script.contains("rm -rf \"$APP_PATH\"\n    ditto") else {
+            throw TestFailure("Updater must not delete the installed app before staging succeeds")
+        }
     }
 
     private static func assertAutomaticCheckSchedule() throws {

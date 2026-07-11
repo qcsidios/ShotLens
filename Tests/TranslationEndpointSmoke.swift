@@ -67,6 +67,9 @@ struct TranslationEndpointSmoke {
         )
         try await assertSingleBlockPlainTextParses()
         try await assertSingleBlockExplanationParses()
+        try await assertSingleBlockProtocolNoiseIsFiltered()
+        try await assertSingleBlockControlTokensAreFiltered()
+        try await assertSingleBlockHTTPHeadersAreFiltered()
         try await assertUnchangedSingleEnglishWordUsesLocalFallback()
         try await assertCommonShortUIWordUsesLocalFallback()
         try await assertEchoedRepairPromptDoesNotRenderAsTranslation()
@@ -364,6 +367,57 @@ struct TranslationEndpointSmoke {
         let result = try await translator.translate(["Hello"], from: "en", to: "zh-Hans")
         guard result == ["你好"] else {
             throw TestFailure("Expected single explanation response to parse, got \(result)")
+        }
+    }
+
+    private static func assertSingleBlockProtocolNoiseIsFiltered() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = "data: {\"type\":\"response.start\"}\n设置\ndata: [DONE]"
+
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(["Settings"], from: "en", to: "zh-Hans")
+        guard result == ["设置"] else {
+            throw TestFailure("Expected protocol edge noise to be removed, got \(result)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 1 else {
+            throw TestFailure("Expected protocol cleanup without repair, got \(MockOpenAIProtocol.requestBodies.count) requests")
+        }
+    }
+
+    private static func assertSingleBlockControlTokensAreFiltered() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = "\u{0000}<|assistant|>设置<|end|>\u{0007}"
+
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(["Settings"], from: "en", to: "zh-Hans")
+        guard result == ["设置"] else {
+            throw TestFailure("Expected model control tokens to be removed, got \(result)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 1 else {
+            throw TestFailure("Expected control-token cleanup without repair, got \(MockOpenAIProtocol.requestBodies.count) requests")
+        }
+    }
+
+    private static func assertSingleBlockHTTPHeadersAreFiltered() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = "HTTP/1.1 200 OK\nContent-Type: text/event-stream\nX-Request-ID: demo\n\n设置"
+
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(["Settings"], from: "en", to: "zh-Hans")
+        guard result == ["设置"] else {
+            throw TestFailure("Expected HTTP response headers at the edge to be removed, got \(result)")
         }
     }
 

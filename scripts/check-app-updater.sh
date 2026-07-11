@@ -13,3 +13,7 @@ swiftc \
   -o "$TEST_BINARY"
 
 "$TEST_BINARY"
+
+rg -n -F 'pgrep -f "$APP_EXECUTABLE"' "$ROOT_DIR/ShotLens/Core/AppUpdater.swift" >/dev/null
+rg -n -F '/usr/bin/open -n "$APP_PATH"' "$ROOT_DIR/ShotLens/Core/AppUpdater.swift" >/dev/null
+rg -n -F 'shotlens-updater.log' "$ROOT_DIR/ShotLens/Core/AppUpdater.swift" >/dev/null

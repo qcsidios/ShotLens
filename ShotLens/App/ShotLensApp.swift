@@ -462,6 +462,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         ShotLensLogger.log(String(format: "OCR 完成，原始 %d 个文本块，合并为 %d 个布局块，耗时 %.2fs", textBlocks.count, layoutBlocks.count, Date().timeIntervalSince(ocrStartedAt)))
 
+        await translateRecognized(layoutBlocks, overlay: overlay, settings: settings)
+    }
+
+    private func translateRecognized(
+        _ layoutBlocks: [TextBlock],
+        overlay: OverlayWindow?,
+        settings: TranslationSettings
+    ) async {
+
         overlay?.setProcessing("正在翻译...")
 
         // 2. 确定源语言和目标语言
@@ -477,6 +486,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             ShotLensLogger.log("翻译失败", error: error)
             overlay?.setMessage(userFacingTranslationFailureMessage(for: error))
+            return
+        }
+        guard translatedTexts.count == layoutBlocks.count else {
+            ShotLensLogger.log("翻译返回数量与 OCR 布局块不一致")
+            overlay?.setMessage("翻译失败")
             return
         }
         ShotLensLogger.log(String(format: "翻译完成，使用 %@，输出 %d 个文本块，耗时 %.2fs", provider.name, translatedTexts.count, Date().timeIntervalSince(translationStartedAt)))
@@ -521,6 +535,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
             }
+            overlay.onRetranslate = overlay.onRetry
             overlay.show(
                 croppedScreenshot: captured.image,
                 at: selection.origin,

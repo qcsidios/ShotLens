@@ -705,7 +705,7 @@ private extension String {
     }
 
     var cleanedTranslationText: String {
-        var text = trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = removingModelEnvelopeNoise
         text = text.bestQuotedCJKSegment ?? text
         let prefixes = [
             #"(?i)^here\s+is\s+the\s+translation\s*[:：]\s*"#,
@@ -719,6 +719,38 @@ private extension String {
         }
         return text
             .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'“”‘’")))
+    }
+
+    private var removingModelEnvelopeNoise: String {
+        let withoutControls = unicodeScalars
+            .filter { !CharacterSet.controlCharacters.contains($0) || $0 == "\n" || $0 == "\t" }
+            .map(String.init)
+            .joined()
+            .replacingOccurrences(of: #"<\|(?:assistant|end|eot_id|endoftext)\|>"#, with: "", options: .regularExpression)
+
+        var lines = withoutControls.components(separatedBy: .newlines)
+        while let first = lines.first,
+              first.trimmingCharacters(in: .whitespacesAndNewlines).isProtocolEnvelopeLine {
+            lines.removeFirst()
+        }
+        while let last = lines.last,
+              last.trimmingCharacters(in: .whitespacesAndNewlines).isProtocolEnvelopeLine {
+            lines.removeLast()
+        }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isProtocolEnvelopeLine: Bool {
+        let lowercased = self.lowercased()
+        if lowercased.hasPrefix("http/")
+            || lowercased.hasPrefix("content-type:")
+            || lowercased.hasPrefix("transfer-encoding:")
+            || lowercased.hasPrefix("x-request-id:") {
+            return true
+        }
+        guard lowercased.hasPrefix("data:") else { return false }
+        let payload = dropFirst(5).trimmingCharacters(in: .whitespacesAndNewlines)
+        return payload == "[DONE]" || payload.hasPrefix("{") || payload.hasPrefix("[")
     }
 
     private var bestQuotedCJKSegment: String? {

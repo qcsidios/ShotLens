@@ -154,6 +154,8 @@ private struct TextLayoutGroup {
             gapMultiplier = 1.2
         case .mixed:
             gapMultiplier = 0.75
+        case .paragraph:
+            gapMultiplier = 0.65
         default:
             gapMultiplier = 0.9
         }
@@ -340,7 +342,7 @@ private extension String {
             scalars.removeFirst()
             removedNoise = true
         }
-        while let last = scalars.last, last.isOCRNoiseScalar {
+        while let last = scalars.last, last.isTrailingOCRNoiseScalar {
             scalars.removeLast()
             removedNoise = true
         }
@@ -384,6 +386,14 @@ private extension Unicode.Scalar {
     var isOCRNoiseScalar: Bool {
         CharacterSet.punctuationCharacters.contains(self)
             || CharacterSet.symbols.contains(self)
+            || (0xE000...0xF8FF).contains(Int(value))
+            || (0xF0000...0xFFFFD).contains(Int(value))
+            || (0x100000...0x10FFFD).contains(Int(value))
+    }
+
+
+    var isTrailingOCRNoiseScalar: Bool {
+        CharacterSet.symbols.contains(self)
             || (0xE000...0xF8FF).contains(Int(value))
             || (0xF0000...0xFFFFD).contains(Int(value))
             || (0x100000...0x10FFFD).contains(Int(value))

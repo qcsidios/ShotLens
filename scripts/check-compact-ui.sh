@@ -60,6 +60,11 @@ if rg -n 'checkUpdateIconView|arrow.clockwise|CABasicAnimation|shotlens.update.s
   exit 1
 fi
 rg -n 'minimumReadableSize' "$OVERLAY_WINDOW" >/dev/null
+rg -n 'OverlayPinButton' "$OVERLAY_WINDOW" >/dev/null
+rg -n 'dismissFromOutsideClick' "$OVERLAY_WINDOW" >/dev/null
+rg -n 'onRetranslate' "$OVERLAY_WINDOW" "$SHOTLENS_APP" >/dev/null
+rg -n 'overlay\.onRetranslate = overlay\.onRetry' "$SHOTLENS_APP" >/dev/null
+rg -n 'translateRecognized' "$SHOTLENS_APP" >/dev/null
 if rg -n 'NSApp\.activate\(ignoringOtherApps: true\)' "$OVERLAY_WINDOW" >/dev/null; then
   echo "Result overlay must not activate the main app because activation can switch away from fullscreen Spaces." >&2
   exit 1

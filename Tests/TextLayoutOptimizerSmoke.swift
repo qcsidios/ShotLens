@@ -8,6 +8,7 @@ struct TextLayoutOptimizerSmoke {
         try assertLongerContentSurvives()
         try assertLikelyIconStillFiltersFromMultipleBlocks()
         try assertLeadingSymbolNoiseIsRemovedFromLabels()
+        try assertParagraphSpacingCreatesSeparateBlocks()
 
         print("Text layout optimizer smoke test passed.")
     }
@@ -82,6 +83,22 @@ struct TextLayoutOptimizerSmoke {
         let result = TextLayoutOptimizer.merge(samples)
         guard result.map(\.text) == ["Settings", "Search"] else {
             throw TestFailure("Expected OCR symbol noise to be stripped from labels, got \(result.map(\.text))")
+        }
+    }
+
+    private static func assertParagraphSpacingCreatesSeparateBlocks() throws {
+        let lines = [
+            block("The first paragraph starts here and", y: 0),
+            block("continues on its second line.", y: 22),
+            block("The second paragraph starts here.", y: 53)
+        ]
+
+        let result = TextLayoutOptimizer.merge([lines[2], lines[0], lines[1]])
+        guard result.map(\.text) == [
+            "The first paragraph starts here and continues on its second line.",
+            "The second paragraph starts here."
+        ] else {
+            throw TestFailure("Expected paragraph spacing to preserve two translation blocks, got \(result.map(\.text))")
         }
     }
 

@@ -22,6 +22,7 @@ enum OverlayGeometry {
 final class OverlayWindow: NSObject, NSWindowDelegate {
     var onDismiss: (() -> Void)?
     var onRetry: (() -> Void)?
+    var onRetranslate: (() -> Void)?
 
     fileprivate static let backdropLevel = NSWindow.Level.screenSaver
     fileprivate static let resultLevel = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
@@ -41,6 +42,8 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
     private var outsideClickMonitor: Any?
     private var didDismiss = false
     private var isShowingTranslation = true
+    private var isPinned = false
+    private var isRetranslating = false
 
     func show(
         croppedScreenshot: CGImage,
@@ -79,6 +82,9 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
         let contentView = OverlayContentView(frame: NSRect(origin: .zero, size: windowRect.size))
         contentView.screenshot = croppedScreenshot
         contentView.displayScale = scale
+        contentView.onTogglePin = { [weak self] in
+            self?.togglePinned()
+        }
         window.contentView = contentView
 
         let statusWindow = OverlayStatusWindow(anchorRect: windowRect)
@@ -104,6 +110,7 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
 
     @MainActor
     func setTranslatedBlocks(_ blocks: [TranslatedBlock]) {
+        isRetranslating = false
         isShowingTranslation = true
         contentView?.setTranslatedBlocks(blocks)
         contentView?.setDisplayMode(.translation)
@@ -112,6 +119,7 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
 
     @MainActor
     func setMessage(_ message: String) {
+        isRetranslating = false
         isShowingTranslation = true
         contentView?.setTranslatedBlocks([])
         contentView?.setDisplayMode(.translation)
@@ -147,7 +155,7 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
             }
             let view = OverlayBackdropView(frame: NSRect(origin: .zero, size: screen.frame.size))
             view.onClose = { [weak self] in
-                self?.dismiss()
+                self?.dismissFromOutsideClick()
             }
             window.contentView = view
             return window
@@ -170,7 +178,7 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
                 if self.saveWindow?.frame.contains(mouseLocation) == true {
                     return
                 }
-                self.dismiss()
+                self.dismissFromOutsideClick()
             }
         }
     }
@@ -181,6 +189,24 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
             closeBackdropWindows()
             finishDismiss()
         }
+    }
+
+    private func dismissFromOutsideClick() {
+        guard !isPinned else { return }
+        dismiss()
+    }
+
+    private func togglePinned() {
+        isPinned.toggle()
+        contentView?.setPinned(isPinned)
+    }
+
+    @MainActor
+    private func beginRetranslation() {
+        guard !isRetranslating else { return }
+        isRetranslating = true
+        setProcessing("正在重新翻译...")
+        onRetranslate?()
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -215,6 +241,7 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
         let callback = onDismiss
         onDismiss = nil
         onRetry = nil
+        onRetranslate = nil
         callback?()
     }
 
@@ -288,6 +315,9 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
         }
         window.onSave = { [weak self] in
             self?.copyCurrentSnapshotToClipboard()
+        }
+        window.onRetranslate = { [weak self] in
+            self?.beginRetranslation()
         }
         saveWindow = window
         window.orderFrontRegardless()
@@ -383,7 +413,11 @@ private final class OverlaySaveWindow: NSPanel {
         didSet { saveView.onSave = onSave }
     }
 
-    private let saveView = StatusActionButtonsView(frame: CGRect(x: 0, y: 0, width: 64, height: 28))
+    var onRetranslate: (() -> Void)? {
+        didSet { saveView.onRetranslate = onRetranslate }
+    }
+
+    private let saveView = StatusActionButtonsView(frame: CGRect(x: 0, y: 0, width: 100, height: 28))
 
     init(statusFrame: CGRect) {
         super.init(
@@ -411,7 +445,7 @@ private final class OverlaySaveWindow: NSPanel {
 
     private static func frame(for statusFrame: CGRect) -> CGRect {
         let gap: CGFloat = 8
-        let size = CGSize(width: 64, height: 28)
+        let size = CGSize(width: 100, height: 28)
         let screenFrame = NSScreen.screens.first { $0.frame.intersects(statusFrame) }?.visibleFrame
             ?? NSScreen.main?.visibleFrame
             ?? statusFrame
@@ -554,12 +588,18 @@ private final class StatusActionButtonsView: NSView {
         didSet { saveButton.onSave = onSave }
     }
 
+    var onRetranslate: (() -> Void)? {
+        didSet { retranslateButton.onRetranslate = onRetranslate }
+    }
+
     private let copyTextButton = StatusCopyTextButton(frame: CGRect(x: 0, y: 0, width: 28, height: 28))
-    private let saveButton = StatusSaveButton(frame: CGRect(x: 36, y: 0, width: 28, height: 28))
+    private let retranslateButton = StatusRetranslateButton(frame: CGRect(x: 36, y: 0, width: 28, height: 28))
+    private let saveButton = StatusSaveButton(frame: CGRect(x: 72, y: 0, width: 28, height: 28))
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         addSubview(copyTextButton)
+        addSubview(retranslateButton)
         addSubview(saveButton)
     }
 
@@ -570,8 +610,30 @@ private final class StatusActionButtonsView: NSView {
     override func layout() {
         super.layout()
         copyTextButton.frame = CGRect(x: 0, y: 0, width: 28, height: 28)
+        retranslateButton.frame = CGRect(x: 36, y: 0, width: 28, height: 28)
         saveButton.frame = CGRect(x: bounds.maxX - 28, y: 0, width: 28, height: 28)
     }
+}
+
+private final class StatusRetranslateButton: NSControl {
+    var onRetranslate: (() -> Void)?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.systemOrange.setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7).fill()
+        let text = "↻" as NSString
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 18, weight: .semibold),
+            .foregroundColor: NSColor.white
+        ]
+        let size = text.size(withAttributes: attributes)
+        text.draw(at: CGPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2), withAttributes: attributes)
+    }
+
+    override func mouseDown(with event: NSEvent) { onRetranslate?() }
 }
 
 private final class StatusCopyTextButton: NSControl {
@@ -699,10 +761,12 @@ private final class OverlayBackdropView: NSView {
 }
 
 final class OverlayContentView: NSView {
+    var onTogglePin: (() -> Void)?
     var screenshot: CGImage?
     var displayScale: CGFloat = 1.0
     var translatedBlocks: [TranslatedBlock] = []
     private var displayMode: OverlayDisplayMode = .translation
+    private let pinButton = OverlayPinButton(frame: CGRect(x: 0, y: 0, width: 24, height: 24))
 
     override var isFlipped: Bool { true }
     override var isOpaque: Bool { false }
@@ -722,6 +786,10 @@ final class OverlayContentView: NSView {
         needsDisplay = true
     }
 
+    func setPinned(_ pinned: Bool) {
+        pinButton.isPinned = pinned
+    }
+
     fileprivate func setDisplayMode(_ mode: OverlayDisplayMode) {
         displayMode = mode
         needsDisplay = true
@@ -730,6 +798,13 @@ final class OverlayContentView: NSView {
     private func setupControls() {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
+        pinButton.onClick = { [weak self] in self?.onTogglePin?() }
+        addSubview(pinButton)
+    }
+
+    override func layout() {
+        super.layout()
+        pinButton.frame = CGRect(x: max(4, bounds.maxX - 28), y: 4, width: 24, height: 24)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -911,6 +986,26 @@ final class OverlayContentView: NSView {
         cacheDisplay(in: bounds, to: bitmap)
         return bitmap.cgImage
     }
+}
+
+private final class OverlayPinButton: NSControl {
+    var onClick: (() -> Void)?
+    var isPinned = false { didSet { needsDisplay = true } }
+
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        (isPinned ? NSColor.systemBlue : NSColor.black.withAlphaComponent(0.55)).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
+        let image = NSImage(systemSymbolName: isPinned ? "pin.fill" : "pin", accessibilityDescription: isPinned ? "解除钉住" : "钉住")
+        let symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
+            .applying(.init(paletteColors: [.white]))
+        image?.withSymbolConfiguration(symbolConfiguration)?
+            .draw(in: bounds.insetBy(dx: 6, dy: 6))
+    }
+
+    override func mouseDown(with event: NSEvent) { onClick?() }
 }
 
 fileprivate enum OverlayDisplayMode {
