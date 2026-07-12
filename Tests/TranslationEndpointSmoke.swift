@@ -77,7 +77,18 @@ struct TranslationEndpointSmoke {
         try await assertAbbreviationUsesSurroundingContext()
         try await assertArrowOutputAvoidsRepairRequest()
         try await assertTypicalLargeSelectionStaysSingleRequest()
-        try await assertPolicyLikeBatchOutputDoesNotSpendRepairRequest()
+        try await assertIndexedJSONStringsAreAlignedWithoutRepair()
+        try await assertMissingIndexedItemRetriesOnlyMissingText()
+        try await assertProductIdentifierMayRemainUntranslated()
+        try await assertMixedProductIdentifierRetriesOnlyOrdinaryEnglish()
+        try await assertAmbiguousSparseIndexesUseWholeBatchRepair()
+        try await assertVersionedSentenceStillRetriesWhenUntranslated()
+        try await assertPunctuatedSentenceRetriesWhenUntranslated()
+        try await assertShortNumericSentenceIsNotAProductIdentifier()
+        try await assertTitleCaseNumericSentenceIsNotAProductIdentifier()
+        try await assertPunctuatedIndexedJSONStaysSingleRequest()
+        try await assertScreenshotTechnicalSentenceRetriesWhenUntranslated()
+        try await assertPolicyLikeBatchOutputUsesOneTargetedRecovery()
         try await assertRepairFailureDoesNotFanOutRequests()
         try await assertEmptySavedSettingsUseDefaultAPI()
         try await assertDefaultFallbackForcesBuiltInEndpointAndModel()
@@ -559,7 +570,215 @@ struct TranslationEndpointSmoke {
         }
     }
 
-    private static func assertPolicyLikeBatchOutputDoesNotSpendRepairRequest() async throws {
+    private static func assertIndexedJSONStringsAreAlignedWithoutRepair() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = #"["0 更新","1 Intelligence Index v4.1","2 功能更新"]"#
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+
+        let result = try await translator.translate(
+            ["UPDATE", "Intelligence Index v4.1", "features updates"],
+            from: "en",
+            to: "zh-Hans"
+        )
+        guard result == ["更新", "Intelligence Index v4.1", "功能更新"] else {
+            throw TestFailure("Expected indexed JSON strings to align locally, got \(result)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 1,
+              !(MockOpenAIProtocol.requestBodies[0].contains("format=index")) else {
+            throw TestFailure("Expected a single JSON-array input request without TSV index protocol")
+        }
+    }
+
+    private static func assertMissingIndexedItemRetriesOnlyMissingText() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContentQueue = [
+            #"["0 个性化模型推荐器","2 探索高级计划"]"#,
+            #"["探索适用于一般工作、编程和客户支持的智能助手"]"#
+        ]
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(
+            ["Personalized model recommender", "Explore agents for general work, coding, and customer support", "Explore premium plans"],
+            from: "en",
+            to: "zh-Hans"
+        )
+        guard result == ["个性化模型推荐器", "探索适用于一般工作、编程和客户支持的智能助手", "探索高级计划"] else {
+            throw TestFailure("Expected missing indexed item to recover in place, got \(result)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 2,
+              MockOpenAIProtocol.requestBodies[1].contains("Explore agents for general work"),
+              !MockOpenAIProtocol.requestBodies[1].contains("Personalized model recommender") else {
+            throw TestFailure("Expected one recovery request containing only the missing source item")
+        }
+    }
+
+    private static func assertProductIdentifierMayRemainUntranslated() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = #"["AA-Briefcase"]"#
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(["AA-Briefcase"], from: "en", to: "zh-Hans")
+        guard result == ["AA-Briefcase"], MockOpenAIProtocol.requestBodies.count == 1 else {
+            throw TestFailure("Expected product identifier to remain unchanged without failing the batch")
+        }
+    }
+
+    private static func assertMixedProductIdentifierRetriesOnlyOrdinaryEnglish() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContentQueue = [
+            #"["0 个性化模型推荐器","1 Explore premium plans","2 AA-Briefcase"]"#,
+            #"["探索高级计划"]"#
+        ]
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(
+            ["Personalized model recommender", "Explore premium plans", "AA-Briefcase"],
+            from: "en",
+            to: "zh-Hans"
+        )
+        guard result == ["个性化模型推荐器", "探索高级计划", "AA-Briefcase"] else {
+            throw TestFailure("Expected only ordinary untranslated English to recover, got \(result)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 2,
+              MockOpenAIProtocol.requestBodies[1].contains("Explore premium plans"),
+              !MockOpenAIProtocol.requestBodies[1].contains("AA-Briefcase") else {
+            throw TestFailure("Expected recovery request to exclude the valid product identifier")
+        }
+    }
+
+    private static func assertAmbiguousSparseIndexesUseWholeBatchRepair() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContentQueue = [
+            #"["1 第一项","2 第二项"]"#,
+            #"["第一项","第二项","第三项"]"#
+        ]
+        let sources = ["First item", "Second item", "Third item"]
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(sources, from: "en", to: "zh-Hans")
+        guard result == ["第一项", "第二项", "第三项"] else {
+            throw TestFailure("Expected ambiguous sparse indexes to avoid guessed alignment, got \(result)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 2,
+              sources.allSatisfy({ MockOpenAIProtocol.requestBodies[1].contains($0) }) else {
+            throw TestFailure("Expected one whole-batch repair when sparse index basis is ambiguous")
+        }
+    }
+
+    private static func assertVersionedSentenceStillRetriesWhenUntranslated() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContentQueue = [
+            #"["0 Features update to Terminal-Bench v2.1"]"#,
+            #"["功能已更新至 Terminal-Bench v2.1"]"#
+        ]
+        let source = "Features update to Terminal-Bench v2.1"
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate([source], from: "en", to: "zh-Hans")
+        guard result == ["功能已更新至 Terminal-Bench v2.1"], MockOpenAIProtocol.requestBodies.count == 2 else {
+            throw TestFailure("Expected a versioned sentence, unlike a product identifier, to be retried")
+        }
+    }
+
+    private static func assertPunctuatedSentenceRetriesWhenUntranslated() async throws {
+        MockOpenAIProtocol.reset()
+        let source = "Compare AI agents across capabilities, pricing, and platform support"
+        MockOpenAIProtocol.assistantContentQueue = [
+            String(data: try JSONSerialization.data(withJSONObject: [source]), encoding: .utf8)!,
+            #"["比较 AI 智能体的能力、价格和平台支持"]"#
+        ]
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate([source], from: "en", to: "zh-Hans")
+        guard result == ["比较 AI 智能体的能力、价格和平台支持"], MockOpenAIProtocol.requestBodies.count == 2 else {
+            throw TestFailure("Expected punctuated untranslated English to receive one targeted recovery")
+        }
+    }
+
+    private static func assertShortNumericSentenceIsNotAProductIdentifier() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContentQueue = [#"["Read chapter 2"]"#, #"["阅读第 2 章"]"#]
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(["Read chapter 2"], from: "en", to: "zh-Hans")
+        guard result == ["阅读第 2 章"], MockOpenAIProtocol.requestBodies.count == 2 else {
+            throw TestFailure("Expected an ordinary numeric sentence to be translated, not treated as an identifier")
+        }
+    }
+
+    private static func assertTitleCaseNumericSentenceIsNotAProductIdentifier() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContentQueue = [#"["Chapter 2"]"#, #"["第 2 章"]"#]
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(["Chapter 2"], from: "en", to: "zh-Hans")
+        guard result == ["第 2 章"], MockOpenAIProtocol.requestBodies.count == 2 else {
+            throw TestFailure("Expected a title-case numeric sentence to be translated, not treated as a versioned product")
+        }
+    }
+
+    private static func assertPunctuatedIndexedJSONStaysSingleRequest() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = #"["0. 更新","1: 标题","2、说明"]"#
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(["UPDATE", "Title", "Description"], from: "en", to: "zh-Hans")
+        guard result == ["更新", "标题", "说明"], MockOpenAIProtocol.requestBodies.count == 1 else {
+            throw TestFailure("Expected punctuated indexes to be stripped and aligned locally, got \(result)")
+        }
+    }
+
+    private static func assertScreenshotTechnicalSentenceRetriesWhenUntranslated() async throws {
+        MockOpenAIProtocol.reset()
+        let source = "Intelligence Index v4.1 features updates to GDPval-AA V2, τ³-Banking, and Terminal-Bench v2.1"
+        MockOpenAIProtocol.assistantContentQueue = [
+            String(data: try JSONSerialization.data(withJSONObject: [source]), encoding: .utf8)!,
+            #"["Intelligence Index v4.1 更新了 GDPval-AA V2、τ³-Banking 和 Terminal-Bench v2.1"]"#
+        ]
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate([source], from: "en", to: "zh-Hans")
+        guard result == ["Intelligence Index v4.1 更新了 GDPval-AA V2、τ³-Banking 和 Terminal-Bench v2.1"],
+              MockOpenAIProtocol.requestBodies.count == 2 else {
+            throw TestFailure("Expected the screenshot's long mixed-script sentence to receive one targeted recovery")
+        }
+    }
+
+    private static func assertPolicyLikeBatchOutputUsesOneTargetedRecovery() async throws {
         MockOpenAIProtocol.reset()
         MockOpenAIProtocol.assistantContentQueue = [
             #"["被拒绝","是高风险"]"#,
@@ -572,19 +791,14 @@ struct TranslationEndpointSmoke {
             model: "test-model"
         ))
 
-        do {
-            _ = try await translator.translate(
-                ["Personalized model recommender", "Explore agents"],
-                from: "en",
-                to: "zh-Hans"
-            )
-            throw TestFailure("Expected suspicious semantic output to fail validation")
-        } catch let error as TestFailure {
-            throw error
-        } catch {
-            guard MockOpenAIProtocol.requestBodies.count == 1 else {
-                throw TestFailure("Semantic validation must not trigger a format repair request")
-            }
+        let result = try await translator.translate(
+            ["Personalized model recommender", "Explore agents"],
+            from: "en",
+            to: "zh-Hans"
+        )
+        guard result == ["个性化模型推荐器", "探索智能体"],
+              MockOpenAIProtocol.requestBodies.count == 2 else {
+            throw TestFailure("Expected suspicious semantic output to recover in one small batch")
         }
     }
 

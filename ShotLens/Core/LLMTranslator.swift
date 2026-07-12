@@ -142,6 +142,15 @@ struct LLMTranslator: TranslationProvider {
             userPayload: try makeUserPayload(texts: texts, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
         )
 
+        if let indexedSlots = parseIndexedTranslationSlots(from: content, expectedCount: texts.count) {
+            return try await recoverIndexedSlots(
+                indexedSlots,
+                sources: texts,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage
+            )
+        }
+
         let parsed: [String]
         do {
             parsed = try parseTranslations(from: content, expectedCount: texts.count)
@@ -149,22 +158,25 @@ struct LLMTranslator: TranslationProvider {
             ShotLensLogger.log("翻译返回格式无法在本地解析，执行一次有界修复：\(content.logSnippet)")
             let repairedContent = try await requestAssistantContent(
                 systemPrompt: repairSystemPrompt(expectedCount: texts.count),
-                userPayload: makeRepairPayload(
+                userPayload: try makeRepairPayload(
                     content: content,
                     expectedCount: texts.count,
                     targetLanguage: targetLanguage,
                     sourceTexts: texts
                 )
             )
-            let repaired = try parseTranslations(from: repairedContent, expectedCount: texts.count)
+            let repaired = try parseCompleteTranslations(from: repairedContent, expectedCount: texts.count)
             let finalized = applyDeterministicFallbacks(to: repaired, sources: texts)
             try validateTranslations(finalized, sources: texts)
             return finalized
         }
 
-        let finalized = applyDeterministicFallbacks(to: parsed, sources: texts)
-        try validateTranslations(finalized, sources: texts)
-        return finalized
+        return try await recoverIndexedSlots(
+            parsed.map(Optional.some),
+            sources: texts,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage
+        )
     }
 
     private func requestAssistantContent(systemPrompt: String, userPayload: String) async throws -> String {
@@ -227,29 +239,30 @@ struct LLMTranslator: TranslationProvider {
     }
 
     private func makeUserPayload(texts: [String], sourceLanguage: String, targetLanguage: String) throws -> String {
-        var lines = [
-            "source=\(sourceLanguage)",
-            "target=\(targetLanguage)",
-            "format=index<TAB>text"
+        let payload: [String: Any] = [
+            "source_language": sourceLanguage,
+            "target_language": targetLanguage,
+            "texts": texts
         ]
-        for (index, text) in texts.enumerated() {
-            lines.append("\(index)\t\(text.lineProtocolEscaped)")
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw TranslationError.invalidLLMResponse
         }
-        return lines.joined(separator: "\n")
+        return json
     }
 
-    private func makeRepairPayload(content: String, expectedCount: Int, targetLanguage: String, sourceTexts: [String]) -> String {
-        var lines = [
-            "target=\(targetLanguage)",
-            "expected_count=\(expectedCount)",
-            "original_items:"
+    private func makeRepairPayload(content: String, expectedCount: Int, targetLanguage: String, sourceTexts: [String]) throws -> String {
+        let payload: [String: Any] = [
+            "target_language": targetLanguage,
+            "expected_count": expectedCount,
+            "original_texts": sourceTexts,
+            "invalid_output": content
         ]
-        for (index, text) in sourceTexts.enumerated() {
-            lines.append("\(index)\t\(text.lineProtocolEscaped)")
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw TranslationError.invalidLLMResponse
         }
-        lines.append("invalid_output:")
-        lines.append(content)
-        return lines.joined(separator: "\n")
+        return json
     }
 
     private func applyDeterministicFallbacks(to translations: [String], sources: [String]) -> [String] {
@@ -261,6 +274,57 @@ struct LLMTranslator: TranslationProvider {
             }
             return translation
         }
+    }
+
+    private func recoverIndexedSlots(
+        _ slots: [String?],
+        sources: [String],
+        sourceLanguage: String,
+        targetLanguage: String
+    ) async throws -> [String] {
+        var result = slots
+        for index in sources.indices {
+            guard let translation = result[index] else { continue }
+            result[index] = applyDeterministicFallbacks(
+                to: [translation],
+                sources: [sources[index]]
+            )[0]
+        }
+        let recoveryIndexes = sources.indices.filter { index in
+            guard let translation = result[index] else { return true }
+            return translationNeedsRecovery(translation, source: sources[index])
+        }
+
+        if !recoveryIndexes.isEmpty {
+            let recoverySources = recoveryIndexes.map { sources[$0] }
+            ShotLensLogger.log("首轮翻译有 \(recoveryIndexes.count) 项缺失或可疑，仅补译这些项目")
+            let recoveryContent = try await requestAssistantContent(
+                systemPrompt: primarySystemPrompt(targetLanguage: targetLanguage),
+                userPayload: try makeUserPayload(
+                    texts: recoverySources,
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage
+                )
+            )
+            let recovered = applyDeterministicFallbacks(
+                to: try parseCompleteTranslations(from: recoveryContent, expectedCount: recoverySources.count),
+                sources: recoverySources
+            )
+            try validateTranslations(recovered, sources: recoverySources)
+            for (offset, index) in recoveryIndexes.enumerated() {
+                result[index] = recovered[offset]
+            }
+        }
+
+        let finalized = applyDeterministicFallbacks(
+            to: try result.map { value in
+                guard let value else { throw TranslationError.invalidLLMResponse }
+                return value
+            },
+            sources: sources
+        )
+        try validateTranslations(finalized, sources: sources)
+        return finalized
     }
 
     private func deterministicUITranslation(for source: String) -> String? {
@@ -288,8 +352,14 @@ struct LLMTranslator: TranslationProvider {
         let normalizedTranslation = translation.normalizedForUntranslatedCheck
         let normalizedSource = source.normalizedForUntranslatedCheck
         guard normalizedTranslation == normalizedSource, !normalizedSource.isEmpty else { return false }
-        guard source.isLikelyTranslatableEnglishText else { return false }
+        guard source.isLikelyTranslatableEnglishText,
+              !source.isLikelyProductIdentifier else { return false }
         return !translation.containsCJK
+    }
+
+    private func translationNeedsRecovery(_ translation: String, source: String) -> Bool {
+        looksLikePolicyMistranslation(translation, source: source)
+            || looksLikeUntranslatedEnglish(translation, source: source)
     }
 
     private func looksLikePolicyMistranslation(_ translation: String, source: String) -> Bool {
@@ -385,6 +455,62 @@ struct LLMTranslator: TranslationProvider {
             return [plainText]
         }
         throw TranslationError.invalidLLMResponse
+    }
+
+    private func parseCompleteTranslations(from content: String, expectedCount: Int) throws -> [String] {
+        if let slots = parseIndexedTranslationSlots(from: content, expectedCount: expectedCount),
+           slots.allSatisfy({ $0 != nil }) {
+            return slots.compactMap { $0 }
+        }
+        return try parseTranslations(from: content, expectedCount: expectedCount)
+    }
+
+    private func parseIndexedTranslationSlots(from content: String, expectedCount: Int) -> [String?]? {
+        let trimmed = content.strippingCodeFence.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let start = trimmed.firstIndex(of: "["),
+              let end = trimmed.lastIndex(of: "]"),
+              let data = String(trimmed[start...end]).data(using: .utf8),
+              let values = try? JSONSerialization.jsonObject(with: data) as? [String],
+              !values.isEmpty,
+              values.count <= expectedCount else {
+            return nil
+        }
+
+        let indexed = values.compactMap { value -> (Int, String)? in
+            let pattern = #"^\s*(\d+)\s*(?:\s+|[.)、:：-]\s*|\t+)(.*?)\s*$"#
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+            let nsValue = value as NSString
+            guard let match = regex.firstMatch(
+                in: value,
+                range: NSRange(location: 0, length: nsValue.length)
+            ), match.numberOfRanges == 3,
+               let index = Int(nsValue.substring(with: match.range(at: 1))) else {
+                return nil
+            }
+            let text = nsValue.substring(with: match.range(at: 2)).cleanedTranslationText
+            return text.isEmpty ? nil : (index, text)
+        }
+        guard indexed.count == values.count else { return nil }
+
+        let rawIndexes = Set(indexed.map(\.0))
+        let usesZeroBasedIndexes: Bool
+        if rawIndexes.contains(0) {
+            usesZeroBasedIndexes = true
+        } else if rawIndexes.contains(expectedCount) {
+            usesZeroBasedIndexes = false
+        } else if indexed.count == expectedCount,
+                  rawIndexes == Set(1...expectedCount) {
+            usesZeroBasedIndexes = false
+        } else {
+            return nil
+        }
+        var slots = [String?](repeating: nil, count: expectedCount)
+        for (rawIndex, text) in indexed {
+            let index = usesZeroBasedIndexes ? rawIndex : rawIndex - 1
+            guard slots.indices.contains(index), slots[index] == nil else { return nil }
+            slots[index] = text
+        }
+        return slots
     }
 
     private func makeBatches(from texts: [String]) -> [[String]] {
@@ -714,14 +840,6 @@ private extension String {
         replacingOccurrences(of: #"^\s*[-*•]\s+"#, with: "", options: .regularExpression)
     }
 
-    var lineProtocolEscaped: String {
-        replacingOccurrences(of: "\t", with: " ")
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\r", with: " ")
-            .replacingOccurrences(of: #" +"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     var containsCJK: Bool {
         range(of: #"\p{Han}"#, options: .regularExpression) != nil
     }
@@ -741,24 +859,54 @@ private extension String {
     var isLikelyTranslatableEnglishText: Bool {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 4,
-              trimmed.count <= 80,
+              trimmed.count <= 500,
               !trimmed.containsCJK,
-              trimmed.range(of: #"[A-Za-z]"#, options: .regularExpression) != nil,
-              trimmed.range(of: #"[0-9_/\\@#$%^&*+=<>{}\[\]|~`]"#, options: .regularExpression) == nil else {
+              trimmed.range(of: #"[_/\\@#$%^&*+=<>{}\[\]|~`]"#, options: .regularExpression) == nil else {
             return false
         }
 
-        let words = trimmed
-            .components(separatedBy: CharacterSet(charactersIn: " -_"))
-            .filter { !$0.isEmpty }
-        guard (1...4).contains(words.count) else { return false }
-        guard words.allSatisfy({ $0.range(of: #"^[A-Za-z']+$"#, options: .regularExpression) != nil }) else {
-            return false
-        }
-        guard words.contains(where: { $0.range(of: #"[aeiouyAEIOUY]"#, options: .regularExpression) != nil }) else {
+        let scalars = trimmed.unicodeScalars
+        let letterCount = scalars.filter { CharacterSet.letters.contains($0) }.count
+        let asciiLetterCount = scalars.filter {
+            (65...90).contains($0.value) || (97...122).contains($0.value)
+        }.count
+        guard asciiLetterCount >= 4,
+              letterCount > 0,
+              Double(asciiLetterCount) / Double(letterCount) >= 0.55,
+              trimmed.range(of: #"[aeiouyAEIOUY]"#, options: .regularExpression) != nil else {
             return false
         }
         return !trimmed.allSatisfy { !$0.isLetter || $0.isUppercase }
+    }
+
+    var isLikelyProductIdentifier: Bool {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = trimmed.split(whereSeparator: { $0 == " " || $0 == "-" })
+        if words.count == 1,
+           trimmed.range(of: #"[A-Za-z].*\d|\d.*[A-Za-z]"#, options: .regularExpression) != nil {
+            return true
+        }
+        let versionPattern = #"^(?:v\d+(?:\.\d+)*|\d+\.\d+(?:\.\d+)*)$"#
+        let hasVersionToken = words.contains { word in
+            word.range(of: versionPattern, options: [.regularExpression, .caseInsensitive]) != nil
+        }
+        if words.count <= 4, hasVersionToken {
+            let nameWords = words.filter {
+                $0.range(of: versionPattern, options: [.regularExpression, .caseInsensitive]) == nil
+            }
+            if !nameWords.isEmpty, nameWords.allSatisfy({ word in
+                guard let first = word.first else { return false }
+                return first.isUppercase
+            }) {
+                return true
+            }
+        }
+        if words.count <= 3,
+           trimmed.contains("-"),
+           trimmed.range(of: #"\b[A-Z]{2,}\b"#, options: .regularExpression) != nil {
+            return true
+        }
+        return false
     }
 
     var labeledSingleTranslation: String? {

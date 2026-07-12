@@ -74,6 +74,13 @@ rg -n 'applyControlVisibility' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'dismissFromOutsideClick' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'onRetranslate' "$OVERLAY_WINDOW" "$SHOTLENS_APP" >/dev/null
 rg -n 'overlay\.onRetranslate = overlay\.onRetry' "$SHOTLENS_APP" >/dev/null
+RETRY_BLOCK="$(sed -n '/overlay\.onRetry =/,/overlay\.onRetranslate =/p' "$SHOTLENS_APP")"
+grep -F 'await self.translate(' <<<"$RETRY_BLOCK" >/dev/null
+grep -F 'captured: captured' <<<"$RETRY_BLOCK" >/dev/null
+if grep -E 'captureFrozenDisplay|executeTranslationFlow|startCapture' <<<"$RETRY_BLOCK" >/dev/null; then
+  echo "Retranslate must re-run OCR from the existing captured image without taking a new screenshot." >&2
+  exit 1
+fi
 rg -n 'translateRecognized' "$SHOTLENS_APP" >/dev/null
 if rg -n 'NSApp\.activate\(ignoringOtherApps: true\)' "$OVERLAY_WINDOW" >/dev/null; then
   echo "Result overlay must not activate the main app because activation can switch away from fullscreen Spaces." >&2
