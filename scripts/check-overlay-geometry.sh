@@ -13,6 +13,7 @@ swiftc \
   "$ROOT_DIR/ShotLens/Core/ShotLensLogger.swift" \
   "$ROOT_DIR/ShotLens/Core/OverlayControlVisibility.swift" \
   "$ROOT_DIR/ShotLens/Core/OverlayLayoutPlanner.swift" \
+  "$ROOT_DIR/ShotLens/Core/OverlayPinAppearance.swift" \
   "$ROOT_DIR/ShotLens/Core/OverlayWindow.swift" \
   "$ROOT_DIR/Tests/OverlayGeometrySmoke.swift" \
   -o "$TEST_BINARY"

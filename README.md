@@ -109,6 +109,7 @@ bash scripts/check-clipboard-capture.sh
 bash scripts/check-text-layout.sh
 bash scripts/check-overlay-control-visibility.sh
 bash scripts/check-overlay-layout.sh
+bash scripts/check-overlay-geometry.sh
 bash scripts/check-overlay-pin-appearance.sh
 bash scripts/check-compact-ui.sh
 bash scripts/check-project-integrity.sh
@@ -126,6 +127,8 @@ bash scripts/check-dmg-layout.sh
 - `check-text-layout.sh`：验证短词不会被误判为图标，并覆盖单词、句子、段落和文章布局。
 - `check-overlay-control-visibility.sh`：验证钉住、处理中、成功和失败状态下的下侧控制区显隐。
 - `check-overlay-layout.sh`：验证相邻段落的原位译文覆盖区域不会重叠或越出截图。
+- `check-overlay-geometry.sh`：验证原位译文窗口的最小尺寸和可见区域约束。
+- `check-overlay-pin-appearance.sh`：验证钉住按钮在普通、悬停和已钉住状态下的外观。
 - `check-compact-ui.sh`：验证 API 详情默认折叠、更新检测文字按钮和译文原位渲染约束。
 - `check-project-integrity.sh`：检查关键项目文件、OCR 辅助进程、框选辅助进程和 Xcode 引用是否完整。
 - `build-local.sh`：执行本地构建。
