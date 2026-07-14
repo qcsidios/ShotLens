@@ -152,6 +152,11 @@ SHOTLENS_APP_VERSION=v0.8.7 bash scripts/release-github.sh
 
 网页方式：打开 GitHub 仓库页面，进入发行版页面，新建发行版，创建或选择已经确定的 tag，填写标题和中文说明，上传 `build/release/ShotLens-$VERSION.dmg`，最后发布。
 
+`build/local`、测试目录、DMG 暂存目录和挂载残留可以在验证后清理；
+`build/release` 中的正式安装包默认至少保留最新版。清理时不得删除整个
+`build/`。只有已经核对 GitHub Release 存在同版本资产且明确决定不再保留
+本地副本时，才可删除正式安装包。
+
 ## 隐私说明
 
 ShotLens 会在本机完成截图、框选、OCR 和译文覆盖渲染。截图像素仅用于本地 OCR 和覆盖渲染；OCR 识别出的文字会发送给默认或你配置的 API 服务商进行翻译。
