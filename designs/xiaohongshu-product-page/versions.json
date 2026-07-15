@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "currentVersion": "v3",
+  "currentVersion": "v4",
   "descriptiveFileNamePattern": "shotlens-xhs-{version}-{sequence}-{purpose}-{format}.png",
   "sequenceFileNamePattern": "{sequence}.png",
   "versions": [
@@ -20,10 +20,17 @@
     },
     {
       "id": "v3",
-      "status": "current",
+      "status": "archived",
       "fileNameMode": "sequence",
       "createdAt": "2026-07-15T08:11:28.000Z",
       "summary": "轮播第一张改为 1:1，其他轮播保持 3:4"
+    },
+    {
+      "id": "v4",
+      "status": "current",
+      "fileNameMode": "sequence",
+      "createdAt": "2026-07-15T08:55:42.000Z",
+      "summary": "取消独立 00 主图，01 首图同时输出 1:1 商品主图与 3:4 轮播首图"
     }
   ]
 }

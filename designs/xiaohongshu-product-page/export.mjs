@@ -32,9 +32,12 @@ for (let index = 0; index < await boards.count(); index += 1) {
   const board = boards.nth(index);
   const name = await board.getAttribute("data-export");
   const explicitFormat = await board.getAttribute("data-format");
+  const explicitFileName = await board.getAttribute("data-file-name");
   const format = explicitFormat ? `-${explicitFormat}` : name.startsWith("00-") ? "-1x1" : /^0[1-9]-/.test(name) ? "-3x4" : "";
   const sequence = name.slice(0, 2);
-  const fileName = versionConfig.fileNameMode === "sequence"
+  const fileName = explicitFileName
+    ? `${explicitFileName}.png`
+    : versionConfig.fileNameMode === "sequence"
     ? `${sequence}.png`
     : `shotlens-xhs-${version}-${name}${format}.png`;
   await board.screenshot({ path: path.join(outputDir, fileName) });

@@ -18,6 +18,11 @@
         {
           "path": "versions/v3/index.html",
           "createdAt": "2026-07-15T08:11:28.000Z",
+          "status": "changes-requested"
+        },
+        {
+          "path": "versions/v4/index.html",
+          "createdAt": "2026-07-15T08:55:42.000Z",
           "status": "needs-review"
         }
       ]
@@ -25,13 +30,13 @@
     "ShotLens 手机阅读预览": {
       "versions": [
         {
-          "path": "versions/v3/mobile-preview.html",
-          "createdAt": "2026-07-15T08:11:28.000Z",
+          "path": "versions/v4/mobile-preview.html",
+          "createdAt": "2026-07-15T08:55:42.000Z",
           "status": "needs-review"
         }
       ]
     }
   },
   "createdAt": "2026-07-15T07:03:15.943Z",
-  "updatedAt": "2026-07-15T08:11:28.000Z"
+  "updatedAt": "2026-07-15T08:55:42.000Z"
 }
