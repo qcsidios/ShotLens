@@ -1,0 +1,18 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "ShotLens 小红书商品详情页": {
+      "versions": [
+        {
+          "path": "index.html",
+          "createdAt": "2026-07-15T07:03:15.939Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-07-15T07:03:15.943Z",
+  "updatedAt": "2026-07-15T07:05:15.754Z"
+}
