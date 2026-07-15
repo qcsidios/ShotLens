@@ -2,9 +2,9 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ShotLens · 小红书商品详情页</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles-v1.css">
 </head>
 <body>
   <header class="workspace-header">
@@ -19,34 +19,44 @@
     <section class="group">
       <h2>商品主图</h2>
       <article class="artboard square cover-square" data-export="00-square-cover" data-screen-label="商品主图">
-        <div class="square-icon-stage">
+        <div class="cover-grid"></div>
+        <div class="crop-mark crop-mark-a"></div>
+        <div class="crop-mark crop-mark-b"></div>
+        <div class="square-brand">
           <img class="square-icon" src="assets/shotlens-icon.png" alt="ShotLens 图标">
+          <div class="square-copy">
+            <p class="eyebrow">macOS 截图翻译</p>
+            <h1>ShotLens</h1>
+            <p class="square-tagline">哪里不懂，截哪里</p>
+          </div>
         </div>
-        <strong class="square-name">ShotLens</strong>
+        <div class="square-footer">
+          <span>英文 → 简体中文</span>
+          <span class="shortcut">⌥ S</span>
+        </div>
       </article>
     </section>
 
     <section class="group">
       <h2>3:4 轮播图</h2>
       <div class="artboard-list">
-        <article class="artboard portrait slide-01 carousel-cover" data-export="01-carousel-cover" data-screen-label="01 轮播封面">
+        <article class="artboard portrait slide-01" data-export="01-pain" data-screen-label="01 痛点">
           <div class="slide-index">01 / 09</div>
-          <div class="carousel-brand">
-            <img src="assets/shotlens-icon.png" alt="ShotLens 图标">
-            <span>ShotLens</span>
-          </div>
           <div class="slide-heading">
-            <p class="eyebrow">macOS 截图翻译</p>
-            <h1>哪里不懂，<br>截哪里。</h1>
-            <p class="cover-subtitle">框选屏幕上的局部英文，<br>直接在原位置查看中文。</p>
+            <p class="eyebrow">是不是每次都这样？</p>
+            <h1>只卡住一个词，<br>却要打断整段思路。</h1>
           </div>
-          <div class="cover-product-demo">
-            <div class="cover-source"><span>Privacy settings</span><strong>Control who can see your activity</strong><p>Your profile activity is visible to people you follow.</p></div>
-            <div class="cover-translation"><strong>控制谁可以看到你的动态</strong><p>你的个人动态对你关注的人可见。</p><i class="pin-symbol">⌖</i></div>
-            <div class="true-status"><span>翻译完成</span><button>显示原文</button></div>
+          <div class="pain-stack">
+            <div class="pain-line"><span class="num">01</span><strong>选中文字</strong><small>有些界面还选不了</small></div>
+            <div class="pain-line"><span class="num">02</span><strong>复制内容</strong><small>原来的位置关系没了</small></div>
+            <div class="pain-line"><span class="num">03</span><strong>切到翻译工具</strong><small>读到哪里，又忘了</small></div>
           </div>
-          <div class="cover-benefits"><span>不复制</span><span>不切换</span><span>原位看懂</span></div>
-          <footer class="slide-footer"><span>ShotLens</span><span>英文 → 简体中文</span></footer>
+          <div class="pain-answer">
+            <span class="selection-corners"></span>
+            <p>其实你只是想知道：</p>
+            <strong>“这里写的是什么？”</strong>
+          </div>
+          <footer class="slide-footer"><span>ShotLens</span><span>哪里不懂，截哪里</span></footer>
         </article>
 
         <article class="artboard portrait slide-02" data-export="02-core-result" data-screen-label="02 原位翻译">
@@ -55,17 +65,28 @@
             <p class="eyebrow">翻译不必把文字搬走</p>
             <h1>就在原来的位置，<br>直接看懂。</h1>
           </div>
-          <div class="window-stage true-overlay-stage">
-            <div class="true-result-window">
-              <div class="source-page"><span class="source-label">ACCOUNT SETTINGS</span><h3>Control who can see your activity</h3><p>Your profile activity is visible to people you follow.</p><div class="source-row">Show activity status <i></i></div></div>
-              <div class="translation-block block-title">控制谁可以看到你的动态</div>
-              <div class="translation-block block-body">你的个人动态对你关注的人可见。</div>
-              <div class="translation-block block-row">显示活动状态</div>
-              <i class="true-pin">⌖</i>
+          <div class="window-stage">
+            <div class="mac-window browser-window">
+              <div class="window-bar"><i></i><i></i><i></i><span>Account settings</span></div>
+              <div class="browser-body">
+                <aside><b>Settings</b><span>Profile</span><span class="active-en">Privacy</span><span>Notifications</span></aside>
+                <section>
+                  <p class="ui-kicker">PRIVACY</p>
+                  <h3>Control who can see your activity</h3>
+                  <p>Your profile activity is visible to people you follow. You can change this at any time.</p>
+                  <div class="toggle-row"><span>Show activity status</span><i></i></div>
+                </section>
+              </div>
             </div>
-            <div class="true-controls">
-              <div class="true-status"><span>翻译完成</span><button>显示原文</button></div>
-              <div class="true-actions"><button aria-label="复制译文">▣</button><button aria-label="重新翻译">↻</button><button aria-label="复制截图">⌁</button></div>
+            <div class="selection-box">
+              <div class="translated-panel">
+                <p class="ui-kicker">隐私</p>
+                <h3>控制谁可以看到你的动态</h3>
+                <p>你的个人动态对你关注的人可见。你可以随时更改此设置。</p>
+                <div class="toggle-row"><span>显示活动状态</span><i></i></div>
+              </div>
+              <span class="pin">⌁</span>
+              <div class="overlay-actions"><span>译</span><span>↻</span><span>▣</span></div>
             </div>
           </div>
           <div class="result-caption">
@@ -151,7 +172,6 @@
             <div class="repo-identity"><img src="assets/shotlens-icon.png" alt=""><div><strong>ShotLens</strong><span>macOS 截图翻译</span></div><button>检查更新</button></div>
             <div class="repo-row"><div><b>屏幕录制权限</b><small>用于框选屏幕内容</small></div><span class="status-ok">● 已开启</span><button>打开设置</button></div>
             <div class="repo-row"><div><b>全局快捷键</b><small>默认 ⌥ S，也可自行设置</small></div><kbd>⌥</kbd><kbd>S</kbd></div>
-            <div class="repo-row"><div><b>开机自动启动</b><small>登录 Mac 后自动运行</small></div><span class="repo-switch"><i></i></span></div>
             <div class="repo-row"><div><b>翻译服务</b><small>默认限免或自备 API</small></div><span class="status-neutral">● 默认限免</span><button>自备 API</button></div>
             <button class="repo-primary">开始截图</button>
           </div>
@@ -165,13 +185,10 @@
             <p class="eyebrow">译完以后，也不急着消失</p>
             <h1>结果留得住，<br>也带得走。</h1>
           </div>
-          <div class="floating-demo true-demo">
-            <div class="true-result-window compact-result">
-              <div class="source-page"><p>Your changes will be applied the next time you open the app.</p></div>
-              <div class="translation-block single-block">你的更改将在下次打开应用时生效。</div>
-              <i class="true-pin">⌖</i>
-            </div>
-            <div class="true-controls"><div class="true-status"><span>翻译完成</span><button>显示原文</button></div><div class="true-actions"><button>▣</button><button>↻</button><button>⌁</button></div></div>
+          <div class="floating-demo">
+            <div class="demo-source">Your changes will be applied the next time you open the app.</div>
+            <div class="demo-translation">你的更改将在下次打开应用时生效。<span class="demo-pin">⌁</span></div>
+            <div class="demo-toolbar"><span>文</span><span>↻</span><span>▣</span></div>
           </div>
           <div class="feature-list">
             <div><span>⌁</span><strong>钉住结果</strong><p>对照着继续操作，不怕浮窗提前消失</p></div>
@@ -234,7 +251,7 @@
       <h2>商品长详情页</h2>
       <article class="artboard long-page" data-export="10-long-detail" data-screen-label="商品长详情页">
         <section class="long-hero">
-          <div class="long-brand"><span class="long-logo-tile"><img src="assets/shotlens-icon.png" alt=""></span><span>ShotLens</span></div>
+          <div class="long-brand"><img src="assets/shotlens-icon.png" alt=""><span>ShotLens</span></div>
           <p class="eyebrow">macOS 截图翻译</p>
           <h1>英文突然挡住你时，<br><em>不必先复制。</em></h1>
           <p class="long-lead">哪里不懂，截哪里。译文留在原来的位置，继续看下去。</p>
@@ -268,7 +285,7 @@
         <section class="long-section feature-section">
           <p class="section-number">04 · 翻译之后</p>
           <h2>结果能留，也能带走。</h2>
-          <div class="long-feature-demo true-demo"><div class="true-result-window compact-result"><div class="source-page"><p>Your changes will be applied the next time you open the app.</p></div><div class="translation-block single-block">你的更改将在下次打开应用时生效。</div><i class="true-pin">⌖</i></div><div class="true-controls"><div class="true-status"><span>翻译完成</span><button>显示原文</button></div><div class="true-actions"><button>▣</button><button>↻</button><button>⌁</button></div></div></div>
+          <div class="long-feature-demo"><div class="demo-source">Your changes will be applied the next time you open the app.</div><div class="demo-translation">你的更改将在下次打开应用时生效。<span class="demo-pin">⌁</span></div><div class="demo-toolbar"><span>文</span><span>↻</span><span>▣</span></div></div>
           <div class="long-features"><div><strong>钉住浮窗</strong><p>边看边操作</p></div><div><strong>原文 / 译文</strong><p>需要时随时切换</p></div><div><strong>重新翻译</strong><p>不用重新框选</p></div><div><strong>复制文字 / 截图</strong><p>直接带到下一步</p></div></div>
         </section>
 
@@ -281,7 +298,6 @@
               <div class="repo-identity"><img src="assets/shotlens-icon.png" alt=""><div><strong>ShotLens</strong><span>macOS 截图翻译</span></div><button>检查更新</button></div>
               <div class="repo-row"><div><b>屏幕录制权限</b><small>用于框选屏幕内容</small></div><span class="status-ok">● 已开启</span><button>打开设置</button></div>
               <div class="repo-row"><div><b>全局快捷键</b><small>默认 ⌥ S，也可自行设置</small></div><kbd>⌥</kbd><kbd>S</kbd></div>
-              <div class="repo-row"><div><b>开机自动启动</b><small>登录 Mac 后自动运行</small></div><span class="repo-switch"><i></i></span></div>
               <div class="repo-row"><div><b>翻译服务</b><small>默认限免或自备 API</small></div><span class="status-neutral">● 默认限免</span><button>自备 API</button></div>
               <button class="repo-primary">开始截图</button>
             </div>

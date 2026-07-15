@@ -6,13 +6,27 @@
     "ShotLens 小红书商品详情页": {
       "versions": [
         {
-          "path": "index.html",
+          "path": "index-v1.html",
           "createdAt": "2026-07-15T07:03:15.939Z",
+          "status": "changes-requested"
+        },
+        {
+          "path": "index.html",
+          "createdAt": "2026-07-15T08:20:00.000Z",
+          "status": "needs-review"
+        }
+      ]
+    },
+    "ShotLens 手机阅读预览": {
+      "versions": [
+        {
+          "path": "mobile-preview.html",
+          "createdAt": "2026-07-15T08:20:00.000Z",
           "status": "needs-review"
         }
       ]
     }
   },
   "createdAt": "2026-07-15T07:03:15.943Z",
-  "updatedAt": "2026-07-15T07:05:15.754Z"
+  "updatedAt": "2026-07-15T08:20:00.000Z"
 }
