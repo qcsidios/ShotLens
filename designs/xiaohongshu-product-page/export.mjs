@@ -9,8 +9,9 @@ const { chromium } = require("playwright");
 const designRoot = path.dirname(fileURLToPath(import.meta.url));
 const manifest = JSON.parse(await readFile(path.join(designRoot, "versions.json"), "utf8"));
 const version = process.argv[2] || manifest.currentVersion;
+const versionConfig = manifest.versions.find((item) => item.id === version);
 
-if (!manifest.versions.some((item) => item.id === version)) {
+if (!versionConfig) {
   throw new Error(`未知版本 ${version}。可用版本：${manifest.versions.map((item) => item.id).join(", ")}`);
 }
 
@@ -32,7 +33,10 @@ for (let index = 0; index < await boards.count(); index += 1) {
   const name = await board.getAttribute("data-export");
   const explicitFormat = await board.getAttribute("data-format");
   const format = explicitFormat ? `-${explicitFormat}` : name.startsWith("00-") ? "-1x1" : /^0[1-9]-/.test(name) ? "-3x4" : "";
-  const fileName = `shotlens-xhs-${version}-${name}${format}.png`;
+  const sequence = name.slice(0, 2);
+  const fileName = versionConfig.fileNameMode === "sequence"
+    ? `${sequence}.png`
+    : `shotlens-xhs-${version}-${name}${format}.png`;
   await board.screenshot({ path: path.join(outputDir, fileName) });
 }
 
