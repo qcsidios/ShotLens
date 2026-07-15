@@ -30,7 +30,8 @@ const boards = page.locator("[data-export]");
 for (let index = 0; index < await boards.count(); index += 1) {
   const board = boards.nth(index);
   const name = await board.getAttribute("data-export");
-  const format = name.startsWith("00-") ? "-1x1" : /^0[1-9]-/.test(name) ? "-3x4" : "";
+  const explicitFormat = await board.getAttribute("data-format");
+  const format = explicitFormat ? `-${explicitFormat}` : name.startsWith("00-") ? "-1x1" : /^0[1-9]-/.test(name) ? "-3x4" : "";
   const fileName = `shotlens-xhs-${version}-${name}${format}.png`;
   await board.screenshot({ path: path.join(outputDir, fileName) });
 }
