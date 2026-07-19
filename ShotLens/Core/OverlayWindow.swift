@@ -2,8 +2,6 @@ import AppKit
 import CoreGraphics
 
 enum OverlayGeometry {
-    static let minimumReadableSize = CGSize(width: 120, height: 44)
-
     static func resultFrame(
         screenshotPixelSize: CGSize,
         screenPosition: CGPoint,
@@ -15,6 +13,25 @@ enum OverlayGeometry {
             height: screenshotPixelSize.height / scale
         )
         return CGRect(origin: screenPosition, size: imageSize)
+    }
+
+    static func displayRect(
+        forPixelRect pixelRect: CGRect,
+        screenshotPixelSize: CGSize,
+        displayBounds: CGRect
+    ) -> CGRect {
+        guard screenshotPixelSize.width > 0,
+              screenshotPixelSize.height > 0,
+              displayBounds.width > 0,
+              displayBounds.height > 0 else {
+            return .zero
+        }
+        return CGRect(
+            x: displayBounds.minX + pixelRect.minX / screenshotPixelSize.width * displayBounds.width,
+            y: displayBounds.minY + pixelRect.minY / screenshotPixelSize.height * displayBounds.height,
+            width: pixelRect.width / screenshotPixelSize.width * displayBounds.width,
+            height: pixelRect.height / screenshotPixelSize.height * displayBounds.height
+        )
     }
 }
 
@@ -868,35 +885,50 @@ final class OverlayContentView: NSView {
         paragraphStyle.alignment = .left
         paragraphStyle.lineBreakMode = .byCharWrapping
 
+        guard let screenshot else { return }
+        let screenshotSize = CGSize(width: screenshot.width, height: screenshot.height)
         let sortedBlocks = translatedBlocks.sorted {
-            let lhs = $0.original.boundingBox.scaledDown(by: displayScale)
-            let rhs = $1.original.boundingBox.scaledDown(by: displayScale)
+            let lhs = $0.original.boundingBox
+            let rhs = $1.original.boundingBox
             if abs(lhs.minY - rhs.minY) > 6 {
                 return lhs.minY < rhs.minY
             }
             return lhs.minX < rhs.minX
         }
-        let typography = stableTypography(for: sortedBlocks)
-        let sourceRects = sortedBlocks.map { $0.original.boundingBox.scaledDown(by: displayScale) }
-        let coverRects = OverlayLayoutPlanner.plan(
-            sourceRects: sourceRects,
-            in: bounds,
-            minimumSize: OverlayGeometry.minimumReadableSize
-        )
+        let sourceRects = sortedBlocks.map {
+            OverlayGeometry.displayRect(
+                forPixelRect: $0.original.boundingBox,
+                screenshotPixelSize: screenshotSize,
+                displayBounds: bounds
+            ).intersection(bounds)
+        }
 
         for (index, block) in sortedBlocks.enumerated() {
             let rect = sourceRects[index]
+            guard rect.width > 0, rect.height > 0 else { continue }
             let layout = textLayout(
                 for: block.translatedText,
                 baseRect: rect,
-                coverRect: coverRects[index],
-                sourceStyle: block.original.visualStyle,
-                typography: typography
+                sourceStyle: block.original.visualStyle
             )
 
-            let backgroundColor = sampledBackgroundColor(for: layout.coverRect)
-            backgroundColor.setFill()
-            NSBezierPath(rect: layout.coverRect).fill()
+            if let restored = OverlayTextBackgroundRestorer.restoredPatch(
+                from: screenshot,
+                pixelRect: block.original.boundingBox,
+                sourceStyle: block.original.visualStyle
+            ) {
+                let restoredPixelRect = OverlayTextBackgroundRestorer.restorationPixelRect(
+                    for: block.original.boundingBox,
+                    imageSize: screenshotSize
+                )
+                let restoredDisplayRect = OverlayGeometry.displayRect(
+                    forPixelRect: restoredPixelRect,
+                    screenshotPixelSize: screenshotSize,
+                    displayBounds: bounds
+                )
+                NSImage(cgImage: restored, size: restoredDisplayRect.size).draw(in: restoredDisplayRect)
+            }
+            let backgroundColor = sampledBackgroundColor(forPixelRect: block.original.boundingBox)
 
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: layout.font,
@@ -913,9 +945,8 @@ final class OverlayContentView: NSView {
         }
     }
 
-    private func sampledBackgroundColor(for displayRect: CGRect) -> NSColor {
+    private func sampledBackgroundColor(forPixelRect pixelRect: CGRect) -> NSColor {
         guard let screenshot else { return .windowBackgroundColor }
-        let pixelRect = displayRect.scaledUp(by: displayScale)
         return screenshot.averageColor(in: pixelRect) ?? .windowBackgroundColor
     }
 
@@ -941,53 +972,30 @@ final class OverlayContentView: NSView {
     private func textLayout(
         for text: String,
         baseRect: CGRect,
-        coverRect: CGRect,
-        sourceStyle: TextBlockVisualStyle,
-        typography: StableTypography
+        sourceStyle: TextBlockVisualStyle
     ) -> TextRenderLayout {
         let display = isDisplayBlock(baseRect)
+        let pixelScaleY = screenshot.map { CGFloat($0.height) / max(bounds.height, 1) }
+            ?? max(displayScale, 1)
         let sourceFontSize = sourceStyle.estimatedFontSize > 0
-            ? sourceStyle.estimatedFontSize / max(displayScale, 1)
+            ? sourceStyle.estimatedFontSize / max(pixelScaleY, 1)
             : baseRect.height * 0.72
-        let targetSize = display
-            ? min(max(16, typography.displayFontSize), 28)
-            : min(max(12, min(sourceFontSize, typography.bodyFontSize)), 21)
-        let inset = textInset(for: coverRect)
-        let verticalInset = min(max(1, inset * 0.7), max(0, coverRect.height * 0.22))
-        let horizontalInset = min(inset, max(0, coverRect.width * 0.14))
-        let textRect = coverRect.insetBy(dx: horizontalInset, dy: verticalInset).integral
-        let font = fontThatFits(text: text, in: textRect, targetSize: targetSize, display: display)
-        return TextRenderLayout(coverRect: coverRect, textRect: textRect, font: font)
-    }
-
-    private func stableTypography(for blocks: [TranslatedBlock]) -> StableTypography {
-        let bodySizes = blocks
-            .filter { !isDisplayBlock($0.original.boundingBox.scaledDown(by: displayScale)) }
-            .map { estimatedSourceFontSize(for: $0.original) }
-            .sorted()
-        let displaySizes = blocks
-            .filter { isDisplayBlock($0.original.boundingBox.scaledDown(by: displayScale)) }
-            .map { estimatedSourceFontSize(for: $0.original) }
-            .sorted()
-        let body = bodySizes.isEmpty ? 16 : bodySizes[bodySizes.count / 2]
-        let display = displaySizes.isEmpty ? max(body, 20) : displaySizes[displaySizes.count / 2]
-        return StableTypography(
-            bodyFontSize: min(max(13, body), 20),
-            displayFontSize: min(max(18, display), 26)
+        let targetSize = min(max(8, sourceFontSize), display ? 28 : 22)
+        let font = fontThatFits(text: text, in: baseRect, targetSize: targetSize, display: display)
+        let renderedHeight = min(baseRect.height, text.boundingSize(font: font, width: baseRect.width).height)
+        let textRect = CGRect(
+            x: baseRect.minX,
+            y: baseRect.minY + max(0, (baseRect.height - renderedHeight) / 2),
+            width: baseRect.width,
+            height: renderedHeight
         )
-    }
-
-    private func estimatedSourceFontSize(for block: TextBlock) -> CGFloat {
-        if block.visualStyle.estimatedFontSize > 0 {
-            return block.visualStyle.estimatedFontSize / max(displayScale, 1)
-        }
-        return block.boundingBox.scaledDown(by: displayScale).height * 0.72
+        return TextRenderLayout(textRect: textRect, font: font)
     }
 
     private func fontThatFits(text: String, in textRect: CGRect, targetSize: CGFloat, display: Bool) -> NSFont {
         let width = max(1, textRect.width)
         let height = max(1, textRect.height)
-        let minimumSize: CGFloat = display ? 12 : 10
+        let minimumSize: CGFloat = 8
         var low = minimumSize
         var high = max(targetSize, low)
         var best = minimumSize
@@ -1013,22 +1021,12 @@ final class OverlayContentView: NSView {
         return preferredFont(size: best, display: display)
     }
 
-    private func textInset(for rect: CGRect) -> CGFloat {
-        let cap: CGFloat = rect.height > 70 ? 8 : 4
-        return max(1, min(cap, min(rect.width, rect.height) * 0.12))
-    }
-
     private func isDisplayBlock(_ rect: CGRect) -> Bool {
         rect.height >= 56 || (rect.width > bounds.width * 0.28 && rect.height >= 34)
     }
 
     private func preferredFont(size: CGFloat, display: Bool) -> NSFont {
-        if display {
-            return NSFont(name: "Songti SC", size: size)
-                ?? NSFont(name: "STSong", size: size)
-                ?? .systemFont(ofSize: size, weight: .semibold)
-        }
-        return .systemFont(ofSize: size, weight: .regular)
+        .systemFont(ofSize: size, weight: display ? .semibold : .regular)
     }
 
     func renderToImage() -> CGImage? {
@@ -1070,6 +1068,186 @@ private final class OverlayPinButton: NSControl {
     }
 
     override func mouseDown(with event: NSEvent) { onClick?() }
+}
+
+enum OverlayTextBackgroundRestorer {
+    static func restorationPixelRect(for pixelRect: CGRect, imageSize: CGSize) -> CGRect {
+        pixelRect.integral.intersection(CGRect(origin: .zero, size: imageSize))
+    }
+
+    static func restoredPatch(
+        from image: CGImage,
+        pixelRect: CGRect,
+        sourceStyle: TextBlockVisualStyle
+    ) -> CGImage? {
+        let imageSize = CGSize(width: image.width, height: image.height)
+        let targetRect = restorationPixelRect(for: pixelRect, imageSize: imageSize)
+        guard !targetRect.isNull, targetRect.width >= 1, targetRect.height >= 1 else { return nil }
+
+        let padding = max(2, min(12, Int((targetRect.height * 0.24).rounded(.up))))
+        let sampleRect = targetRect
+            .insetBy(dx: -CGFloat(padding), dy: -CGFloat(padding))
+            .integral
+            .intersection(CGRect(origin: .zero, size: imageSize))
+        guard let crop = image.cropping(to: sampleRect) else { return nil }
+
+        let sampleWidth = crop.width
+        let sampleHeight = crop.height
+        guard sampleWidth > 0, sampleHeight > 0,
+              var samplePixels = rgbaPixels(from: crop) else { return nil }
+
+        let targetWidth = Int(targetRect.width)
+        let targetHeight = Int(targetRect.height)
+        let offsetX = Int(targetRect.minX - sampleRect.minX)
+        let offsetY = Int(targetRect.minY - sampleRect.minY)
+        guard targetWidth > 0, targetHeight > 0,
+              offsetX >= 0, offsetY >= 0,
+              offsetX + targetWidth <= sampleWidth,
+              offsetY + targetHeight <= sampleHeight else { return nil }
+
+        var output = [UInt8](repeating: 0, count: targetWidth * targetHeight * 4)
+        var mask = [Bool](repeating: false, count: targetWidth * targetHeight)
+        let foreground = (
+            red: Double(sourceStyle.foregroundRed),
+            green: Double(sourceStyle.foregroundGreen),
+            blue: Double(sourceStyle.foregroundBlue)
+        )
+        let hasForegroundEstimate = sourceStyle.foregroundLuminance >= 0
+        let topSampleY = max(0, offsetY - 1)
+        let bottomSampleY = min(sampleHeight - 1, offsetY + targetHeight)
+
+        for y in 0..<targetHeight {
+            let interpolation = targetHeight == 1 ? 0.5 : Double(y) / Double(targetHeight - 1)
+            for x in 0..<targetWidth {
+                let sampleX = offsetX + x
+                let sourceIndex = ((offsetY + y) * sampleWidth + sampleX) * 4
+                let outputIndex = (y * targetWidth + x) * 4
+                output[outputIndex] = samplePixels[sourceIndex]
+                output[outputIndex + 1] = samplePixels[sourceIndex + 1]
+                output[outputIndex + 2] = samplePixels[sourceIndex + 2]
+                output[outputIndex + 3] = samplePixels[sourceIndex + 3]
+
+                let topIndex = (topSampleY * sampleWidth + sampleX) * 4
+                let bottomIndex = (bottomSampleY * sampleWidth + sampleX) * 4
+                let predicted = interpolatedColor(
+                    pixels: samplePixels,
+                    topIndex: topIndex,
+                    bottomIndex: bottomIndex,
+                    amount: interpolation
+                )
+                let current = (
+                    red: Double(samplePixels[sourceIndex]) / 255,
+                    green: Double(samplePixels[sourceIndex + 1]) / 255,
+                    blue: Double(samplePixels[sourceIndex + 2]) / 255
+                )
+                let backgroundDistance = colorDistance(current, predicted)
+                let luminanceDifference = abs(luminance(current) - luminance(predicted))
+                let foregroundDistance = colorDistance(current, foreground)
+                let likelyGlyph = hasForegroundEstimate
+                    ? foregroundDistance <= backgroundDistance + 0.12 && luminanceDifference >= 0.035
+                    : luminanceDifference >= 0.14
+                mask[y * targetWidth + x] = likelyGlyph
+            }
+        }
+
+        let originalMask = mask
+        for y in 0..<targetHeight {
+            for x in 0..<targetWidth where originalMask[y * targetWidth + x] {
+                for neighborY in max(0, y - 1)...min(targetHeight - 1, y + 1) {
+                    for neighborX in max(0, x - 1)...min(targetWidth - 1, x + 1) {
+                        mask[neighborY * targetWidth + neighborX] = true
+                    }
+                }
+            }
+        }
+
+        for y in 0..<targetHeight {
+            let interpolation = targetHeight == 1 ? 0.5 : Double(y) / Double(targetHeight - 1)
+            for x in 0..<targetWidth where mask[y * targetWidth + x] {
+                let sampleX = offsetX + x
+                let topIndex = (topSampleY * sampleWidth + sampleX) * 4
+                let bottomIndex = (bottomSampleY * sampleWidth + sampleX) * 4
+                let predicted = interpolatedColor(
+                    pixels: samplePixels,
+                    topIndex: topIndex,
+                    bottomIndex: bottomIndex,
+                    amount: interpolation
+                )
+                let outputIndex = (y * targetWidth + x) * 4
+                output[outputIndex] = UInt8((predicted.red * 255).rounded().clamped(to: 0...255))
+                output[outputIndex + 1] = UInt8((predicted.green * 255).rounded().clamped(to: 0...255))
+                output[outputIndex + 2] = UInt8((predicted.blue * 255).rounded().clamped(to: 0...255))
+                output[outputIndex + 3] = 255
+            }
+        }
+        samplePixels.removeAll(keepingCapacity: false)
+        return makeImage(width: targetWidth, height: targetHeight, pixels: &output)
+    }
+
+    private static func rgbaPixels(from image: CGImage) -> [UInt8]? {
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let base = buffer.baseAddress,
+                  let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+                  let context = CGContext(
+                    data: base,
+                    width: image.width,
+                    height: image.height,
+                    bitsPerComponent: 8,
+                    bytesPerRow: image.width * 4,
+                    space: colorSpace,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                  ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            return true
+        }
+        return rendered ? pixels : nil
+    }
+
+    private static func makeImage(width: Int, height: Int, pixels: inout [UInt8]) -> CGImage? {
+        pixels.withUnsafeMutableBytes { buffer in
+            guard let base = buffer.baseAddress,
+                  let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+                  let context = CGContext(
+                    data: base,
+                    width: width,
+                    height: height,
+                    bitsPerComponent: 8,
+                    bytesPerRow: width * 4,
+                    space: colorSpace,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                  ) else { return nil }
+            return context.makeImage()
+        }
+    }
+
+    private static func interpolatedColor(
+        pixels: [UInt8],
+        topIndex: Int,
+        bottomIndex: Int,
+        amount: Double
+    ) -> (red: Double, green: Double, blue: Double) {
+        let inverse = 1 - amount
+        return (
+            red: (Double(pixels[topIndex]) * inverse + Double(pixels[bottomIndex]) * amount) / 255,
+            green: (Double(pixels[topIndex + 1]) * inverse + Double(pixels[bottomIndex + 1]) * amount) / 255,
+            blue: (Double(pixels[topIndex + 2]) * inverse + Double(pixels[bottomIndex + 2]) * amount) / 255
+        )
+    }
+
+    private static func colorDistance(
+        _ lhs: (red: Double, green: Double, blue: Double),
+        _ rhs: (red: Double, green: Double, blue: Double)
+    ) -> Double {
+        let red = lhs.red - rhs.red
+        let green = lhs.green - rhs.green
+        let blue = lhs.blue - rhs.blue
+        return sqrt(red * red + green * green + blue * blue)
+    }
+
+    private static func luminance(_ color: (red: Double, green: Double, blue: Double)) -> Double {
+        0.2126 * color.red + 0.7152 * color.green + 0.0722 * color.blue
+    }
 }
 
 private extension CGImage {
@@ -1179,14 +1357,8 @@ fileprivate enum OverlayDisplayMode {
 }
 
 private struct TextRenderLayout {
-    let coverRect: CGRect
     let textRect: CGRect
     let font: NSFont
-}
-
-private struct StableTypography {
-    let bodyFontSize: CGFloat
-    let displayFontSize: CGFloat
 }
 
 private extension String {
@@ -1213,25 +1385,8 @@ private extension String {
     }
 }
 
-private extension CGRect {
-    func scaledDown(by scale: CGFloat) -> CGRect {
-        let value = max(scale, 1.0)
-        return CGRect(
-            x: origin.x / value,
-            y: origin.y / value,
-            width: width / value,
-            height: height / value
-        )
-    }
-
-
-    func scaledUp(by scale: CGFloat) -> CGRect {
-        let value = max(scale, 1.0)
-        return CGRect(
-            x: origin.x * value,
-            y: origin.y * value,
-            width: width * value,
-            height: height * value
-        )
+private extension Double {
+    func clamped(to range: ClosedRange<Double>) -> Double {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }

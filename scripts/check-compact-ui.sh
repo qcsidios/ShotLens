@@ -61,7 +61,6 @@ if rg -n 'checkUpdateIconView|arrow.clockwise|CABasicAnimation|shotlens.update.s
   echo "Update check should use a text button, not a spinning icon." >&2
   exit 1
 fi
-rg -n 'minimumReadableSize' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'OverlayPinButton' "$OVERLAY_WINDOW" >/dev/null
 if rg -n 'NSColor\.system(?:Blue|Green|Orange).*setFill' "$OVERLAY_WINDOW" >/dev/null; then
   echo "Overlay action buttons must use one neutral color." >&2
@@ -108,9 +107,14 @@ if rg -n 'SelectionClient\(\)\.select|ShotLensSelect' "$SHOTLENS_APP" "$ROOT_DIR
   exit 1
 fi
 rg -n 'InProcessSelectionOverlay' "$SHOTLENS_APP" "$SELECTION_OVERLAY" >/dev/null
-rg -n 'OverlayLayoutPlanner\.plan' "$OVERLAY_WINDOW" >/dev/null
+rg -n 'OverlayGeometry\.displayRect' "$OVERLAY_WINDOW" >/dev/null
+rg -n 'OverlayTextBackgroundRestorer\.restoredPatch' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'sampledBackgroundColor' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'resolvedTextColor' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'var best = minimumSize' "$OVERLAY_WINDOW" >/dev/null
+if rg -n 'backgroundColor\.setFill|NSBezierPath\(rect: layout\.' "$OVERLAY_WINDOW" >/dev/null; then
+  echo "Translated text must not render on a solid background block." >&2
+  exit 1
+fi
 
 echo "Compact UI check passed."

@@ -16,7 +16,7 @@ ShotLens 是一个轻量级 macOS 菜单栏截图翻译工具。
 - 支持填写 `/v1`、`/v1/chat/completions`、`/v1/models` 等常见 API 地址形式
 - API 测试按钮会检查真实聊天补全端点，减少 `/models` 不可用和模型格式漂移造成的误报
 - 模型字段可选：填写时显式传入，留空时由 API 服务商使用默认行为
-- 针对 UI 文本、菜单、段落、文章和混合截图的布局感知渲染，按原位置采样背景色覆盖原文，不再统一铺白底
+- 译文按 OCR 像素坐标锚定原文字位置；原文字形使用周边背景像素局部重建，不绘制纯色底板或译文卡片
 - 可拖动的结果浮窗，支持重试、原文/译文切换、复制截图和纯文本译文
 - 简洁控制台，用于查看权限、快捷键、开机启动和折叠式 API 设置
 - 应用图标与 macOS 菜单栏模板图标
@@ -110,7 +110,6 @@ bash scripts/check-multi-display-capture.sh
 bash scripts/check-clipboard-capture.sh
 bash scripts/check-text-layout.sh
 bash scripts/check-overlay-control-visibility.sh
-bash scripts/check-overlay-layout.sh
 bash scripts/check-overlay-geometry.sh
 bash scripts/check-overlay-pin-appearance.sh
 bash scripts/check-compact-ui.sh
@@ -130,8 +129,7 @@ bash scripts/check-dmg-layout.sh
 - `check-clipboard-capture.sh`：验证框选完成后自动把原始选区截图写入剪贴板。
 - `check-text-layout.sh`：验证短词不会被误判为图标，并覆盖单词、句子、段落和文章布局。
 - `check-overlay-control-visibility.sh`：验证钉住、处理中、成功和失败状态下的下侧控制区显隐。
-- `check-overlay-layout.sh`：验证相邻段落的原位译文覆盖区域不会重叠或越出截图。
-- `check-overlay-geometry.sh`：验证原位译文窗口的最小尺寸和可见区域约束。
+- `check-overlay-geometry.sh`：验证 OCR 像素坐标不漂移，并确保原文字形清除后仍保留背景纹理。
 - `check-overlay-pin-appearance.sh`：验证钉住按钮在普通、悬停和已钉住状态下的外观。
 - `check-compact-ui.sh`：验证 API 详情默认折叠、更新检测文字按钮和译文原位渲染约束。
 - `check-project-integrity.sh`：检查关键项目文件、OCR 辅助进程、框选辅助进程和 Xcode 引用是否完整。
