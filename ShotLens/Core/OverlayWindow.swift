@@ -295,10 +295,7 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
               let image = contentView.renderToImage() else {
             return
         }
-        let text = contentView.translatedBlocks
-            .map(\.translatedText)
-            .joined(separator: "\n")
-        ClipboardManager().copyToClipboard(image: image, text: text)
+        ClipboardManager().copyImageToClipboard(image: image)
         ShotLensLogger.log("截图已保存到剪贴板")
         dismiss()
     }
@@ -1143,8 +1140,10 @@ enum OverlayTextBackgroundRestorer {
                 let backgroundDistance = colorDistance(current, predicted)
                 let luminanceDifference = abs(luminance(current) - luminance(predicted))
                 let foregroundDistance = colorDistance(current, foreground)
+                let obviousGlyph = backgroundDistance >= 0.22 || luminanceDifference >= 0.12
                 let likelyGlyph = hasForegroundEstimate
-                    ? foregroundDistance <= backgroundDistance + 0.12 && luminanceDifference >= 0.035
+                    ? luminanceDifference >= 0.035
+                        && (foregroundDistance <= backgroundDistance + 0.12 || obviousGlyph)
                     : luminanceDifference >= 0.14
                 mask[y * targetWidth + x] = likelyGlyph
             }
@@ -1181,7 +1180,7 @@ enum OverlayTextBackgroundRestorer {
             }
         }
         samplePixels.removeAll(keepingCapacity: false)
-        return makeImage(width: targetWidth, height: targetHeight, pixels: &output)
+        return makeImage(width: targetWidth, height: targetHeight, pixels: output)
     }
 
     private static func rgbaPixels(from image: CGImage) -> [UInt8]? {
@@ -1204,21 +1203,23 @@ enum OverlayTextBackgroundRestorer {
         return rendered ? pixels : nil
     }
 
-    private static func makeImage(width: Int, height: Int, pixels: inout [UInt8]) -> CGImage? {
-        pixels.withUnsafeMutableBytes { buffer in
-            guard let base = buffer.baseAddress,
-                  let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-                  let context = CGContext(
-                    data: base,
-                    width: width,
-                    height: height,
-                    bitsPerComponent: 8,
-                    bytesPerRow: width * 4,
-                    space: colorSpace,
-                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-                  ) else { return nil }
-            return context.makeImage()
-        }
+    private static func makeImage(width: Int, height: Int, pixels: [UInt8]) -> CGImage? {
+        let data = Data(pixels)
+        guard let provider = CGDataProvider(data: data as CFData),
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        return CGImage(
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+        )
     }
 
     private static func interpolatedColor(

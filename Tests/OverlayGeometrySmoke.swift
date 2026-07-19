@@ -7,6 +7,7 @@ struct OverlayGeometrySmoke {
         try assertTinySelectionKeepsCapturedAspectRatio()
         try assertPixelRectKeepsExactTopLeftAnchor()
         try assertTextRemovalPreservesBackgroundVariation()
+        try assertTextRemovalSurvivesImperfectForegroundEstimate()
 
         print("Overlay geometry smoke test passed.")
     }
@@ -29,15 +30,34 @@ struct OverlayGeometrySmoke {
     }
 
     private static func assertTextRemovalPreservesBackgroundVariation() throws {
+        try assertDarkTextIsRemoved(
+            foreground: (red: 0, green: 0, blue: 0),
+            message: "Original glyph pixels were not removed"
+        )
+    }
+
+    private static func assertTextRemovalSurvivesImperfectForegroundEstimate() throws {
+        try assertDarkTextIsRemoved(
+            foreground: (red: 1, green: 1, blue: 1),
+            message: "Obvious glyph pixels survived an imperfect OCR color estimate"
+        )
+    }
+
+    private static func assertDarkTextIsRemoved(
+        foreground: (red: CGFloat, green: CGFloat, blue: CGFloat),
+        message: String
+    ) throws {
         let image = try makeGradientImageWithDarkText()
         let sourceRect = CGRect(x: 20, y: 10, width: 40, height: 20)
         let style = TextBlockVisualStyle(
             confidence: 1,
             estimatedFontSize: 12,
-            foregroundRed: 0,
-            foregroundGreen: 0,
-            foregroundBlue: 0,
-            foregroundLuminance: 0,
+            foregroundRed: foreground.red,
+            foregroundGreen: foreground.green,
+            foregroundBlue: foreground.blue,
+            foregroundLuminance: 0.2126 * foreground.red
+                + 0.7152 * foreground.green
+                + 0.0722 * foreground.blue,
             strokeDensity: 0.2
         )
         guard let patch = OverlayTextBackgroundRestorer.restoredPatch(
@@ -47,7 +67,10 @@ struct OverlayGeometrySmoke {
         ) else {
             throw TestFailure("Expected a reconstructed background patch")
         }
-        let pixels = try rgbaPixels(from: patch)
+        let replacement = [UInt8](repeating: 7, count: patch.width * patch.height * 4)
+        let pixels = try withExtendedLifetime(replacement) {
+            try rgbaPixels(from: patch)
+        }
         var hasDarkPixel = false
         var redValues = Set<UInt8>()
         for index in stride(from: 0, to: pixels.count, by: 4) {
@@ -56,7 +79,7 @@ struct OverlayGeometrySmoke {
             redValues.insert(pixels[index])
         }
         guard !hasDarkPixel else {
-            throw TestFailure("Original glyph pixels were not removed")
+            throw TestFailure(message)
         }
         guard redValues.count >= 12 else {
             throw TestFailure("Background reconstruction collapsed into a flat color block")
@@ -97,7 +120,7 @@ struct OverlayGeometrySmoke {
                 }
             }
         }
-        return try makeImage(width: width, height: height, pixels: &pixels)
+        return try makeImage(width: width, height: height, pixels: pixels)
     }
 
     private static func rgbaPixels(from image: CGImage) throws -> [UInt8] {
@@ -118,18 +141,23 @@ struct OverlayGeometrySmoke {
         return pixels
     }
 
-    private static func makeImage(width: Int, height: Int, pixels: inout [UInt8]) throws -> CGImage {
+    private static func makeImage(width: Int, height: Int, pixels: [UInt8]) throws -> CGImage {
+        let data = Data(pixels)
         guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-              let context = CGContext(
-                data: &pixels,
+              let provider = CGDataProvider(data: data as CFData),
+              let image = CGImage(
                 width: width,
                 height: height,
                 bitsPerComponent: 8,
+                bitsPerPixel: 32,
                 bytesPerRow: width * 4,
                 space: colorSpace,
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              ),
-              let image = context.makeImage() else {
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider,
+                decode: nil,
+                shouldInterpolate: false,
+                intent: .defaultIntent
+              ) else {
             throw TestFailure("Unable to create gradient test image")
         }
         return image

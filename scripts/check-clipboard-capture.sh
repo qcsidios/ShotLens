@@ -17,4 +17,13 @@ swiftc \
 rg -n -F 'ClipboardManager().copyImageToClipboard(image: captured.image)' \
   "$ROOT_DIR/ShotLens/App/ShotLensApp.swift" >/dev/null
 
+rg -n -F 'ClipboardManager().copyImageToClipboard(image: image)' \
+  "$ROOT_DIR/ShotLens/Core/OverlayWindow.swift" >/dev/null
+
+if rg -n 'copyToClipboard\(image:.*text:' \
+  "$ROOT_DIR/ShotLens/Core/OverlayWindow.swift" >/dev/null; then
+  echo "The checkmark action must copy only the rendered PNG, not competing text data." >&2
+  exit 1
+fi
+
 echo "Automatic selection clipboard check passed."
