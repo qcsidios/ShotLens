@@ -894,12 +894,16 @@ final class OverlayContentView: NSView {
                 typography: typography
             )
 
-            NSColor.white.withAlphaComponent(0.97).setFill()
-            NSBezierPath(roundedRect: layout.coverRect, xRadius: 3, yRadius: 3).fill()
+            let backgroundColor = sampledBackgroundColor(for: layout.coverRect)
+            backgroundColor.setFill()
+            NSBezierPath(rect: layout.coverRect).fill()
 
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: layout.font,
-                .foregroundColor: NSColor.black,
+                .foregroundColor: resolvedTextColor(
+                    sourceStyle: block.original.visualStyle,
+                    backgroundColor: backgroundColor
+                ),
                 .paragraphStyle: paragraphStyle
             ]
             (block.translatedText as NSString).draw(
@@ -907,6 +911,31 @@ final class OverlayContentView: NSView {
                 withAttributes: attrs
             )
         }
+    }
+
+    private func sampledBackgroundColor(for displayRect: CGRect) -> NSColor {
+        guard let screenshot else { return .windowBackgroundColor }
+        let pixelRect = displayRect.scaledUp(by: displayScale)
+        return screenshot.averageColor(in: pixelRect) ?? .windowBackgroundColor
+    }
+
+    private func resolvedTextColor(
+        sourceStyle: TextBlockVisualStyle,
+        backgroundColor: NSColor
+    ) -> NSColor {
+        let backgroundLuminance = backgroundColor.relativeLuminance
+        if sourceStyle.foregroundLuminance >= 0 {
+            let sourceColor = NSColor(
+                calibratedRed: sourceStyle.foregroundRed,
+                green: sourceStyle.foregroundGreen,
+                blue: sourceStyle.foregroundBlue,
+                alpha: 1
+            )
+            if sourceColor.contrastRatio(againstLuminance: backgroundLuminance) >= 3.2 {
+                return sourceColor
+            }
+        }
+        return backgroundLuminance > 0.48 ? .black : .white
     }
 
     private func textLayout(
@@ -1075,6 +1104,73 @@ private extension CGImage {
         }
         return total / Double(size * size)
     }
+
+    func averageColor(in rect: CGRect) -> NSColor? {
+        let clipped = rect.intersection(CGRect(x: 0, y: 0, width: width, height: height))
+        guard !clipped.isNull, clipped.width >= 1, clipped.height >= 1,
+              let crop = cropping(to: clipped) else { return nil }
+        let size = 12
+        var pixels = [UInt8](repeating: 0, count: size * size * 4)
+        let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let base = buffer.baseAddress,
+                  let context = CGContext(
+                    data: base,
+                    width: size,
+                    height: size,
+                    bitsPerComponent: 8,
+                    bytesPerRow: size * 4,
+                    space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                  ) else { return false }
+            context.interpolationQuality = .low
+            context.draw(crop, in: CGRect(x: 0, y: 0, width: size, height: size))
+            return true
+        }
+        guard rendered else { return nil }
+
+        var red = 0.0
+        var green = 0.0
+        var blue = 0.0
+        var count = 0.0
+        for y in 0..<size {
+            for x in 0..<size where x == 0 || y == 0 || x == size - 1 || y == size - 1 {
+                let index = (y * size + x) * 4
+                guard pixels[index + 3] > 20 else { continue }
+                red += Double(pixels[index]) / 255
+                green += Double(pixels[index + 1]) / 255
+                blue += Double(pixels[index + 2]) / 255
+                count += 1
+            }
+        }
+        guard count > 0 else { return nil }
+        return NSColor(
+            calibratedRed: red / count,
+            green: green / count,
+            blue: blue / count,
+            alpha: 1
+        )
+    }
+}
+
+private extension NSColor {
+    var relativeLuminance: Double {
+        guard let rgb = usingColorSpace(.sRGB) else { return 1 }
+        func linear(_ value: CGFloat) -> Double {
+            let component = Double(value)
+            return component <= 0.04045
+                ? component / 12.92
+                : pow((component + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(rgb.redComponent)
+            + 0.7152 * linear(rgb.greenComponent)
+            + 0.0722 * linear(rgb.blueComponent)
+    }
+
+    func contrastRatio(againstLuminance other: Double) -> Double {
+        let lighter = max(relativeLuminance, other)
+        let darker = min(relativeLuminance, other)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
 }
 
 fileprivate enum OverlayDisplayMode {
@@ -1125,6 +1221,17 @@ private extension CGRect {
             y: origin.y / value,
             width: width / value,
             height: height / value
+        )
+    }
+
+
+    func scaledUp(by scale: CGFloat) -> CGRect {
+        let value = max(scale, 1.0)
+        return CGRect(
+            x: origin.x * value,
+            y: origin.y * value,
+            width: width * value,
+            height: height * value
         )
     }
 }

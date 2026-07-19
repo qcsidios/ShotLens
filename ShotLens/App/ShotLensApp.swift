@@ -465,11 +465,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         ShotLensLogger.log(String(format: "布局完成，合并为 %d 个段落，耗时 %.2fs", layoutBlocks.count, Date().timeIntervalSince(layoutStartedAt)))
 
-        await translateRecognized(layoutBlocks, overlay: overlay, settings: settings, pipelineStartedAt: pipelineStartedAt)
+        let contentPlan = TranslationContentPlan.make(from: layoutBlocks)
+        guard !contentPlan.sourceTexts.isEmpty else {
+            ShotLensLogger.log("选区内没有需要翻译的英文")
+            overlay?.setMessage("未识别到英文")
+            return
+        }
+
+        await translateRecognized(contentPlan, overlay: overlay, settings: settings, pipelineStartedAt: pipelineStartedAt)
     }
 
     private func translateRecognized(
-        _ layoutBlocks: [TextBlock],
+        _ contentPlan: TranslationContentPlan,
         overlay: OverlayWindow?,
         settings: TranslationSettings,
         pipelineStartedAt: Date
@@ -482,7 +489,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let targetLang = "zh-Hans"
 
         let provider = TranslationProviderFactory.create(with: settings)
-        let texts = layoutBlocks.map { $0.text }
+        let texts = contentPlan.sourceTexts
         let translationStartedAt = Date()
         let translatedTexts: [String]
         do {
@@ -492,17 +499,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             overlay?.setMessage(userFacingTranslationFailureMessage(for: error))
             return
         }
-        guard translatedTexts.count == layoutBlocks.count else {
-            ShotLensLogger.log("翻译返回数量与 OCR 布局块不一致")
+        guard let translatedBlocks = contentPlan.applying(translatedTexts) else {
+            ShotLensLogger.log("翻译返回数量与待翻译英文片段不一致")
             overlay?.setMessage("翻译失败")
             return
         }
         ShotLensLogger.log(String(format: "翻译完成，使用 %@，输出 %d 个文本块，耗时 %.2fs", provider.name, translatedTexts.count, Date().timeIntervalSince(translationStartedAt)))
-
-        // 4. 组装 TranslatedBlock
-        let translatedBlocks = zip(layoutBlocks, translatedTexts).map { (block, translation) in
-            TranslatedBlock(original: block, translatedText: translation)
-        }
 
         overlay?.setTranslatedBlocks(translatedBlocks)
         ShotLensLogger.log(String(format: "翻译流程总耗时 %.2fs", Date().timeIntervalSince(pipelineStartedAt)))

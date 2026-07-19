@@ -46,6 +46,8 @@ rg -n 'usesDefaultAPIKey \\|\\| !isApiDetailsExpanded' "$MAIN_WINDOW" >/dev/null
 rg -n -F 'toggleAPIButton.title = usesDefaultAPIKey ? "自备 API"' "$MAIN_WINDOW" >/dev/null
 rg -n 'scheduleAutomaticUpdateChecks' "$MAIN_WINDOW" >/dev/null
 rg -n 'performAutomaticUpdateCheckIfNeeded' "$MAIN_WINDOW" >/dev/null
+rg -n 'automaticallyInstalls: true' "$MAIN_WINDOW" >/dev/null
+rg -n 'canAutomaticallyInstall' "$MAIN_WINDOW" >/dev/null
 
 if rg -n 'showReleaseNotesIfNeeded|lastShownReleaseNotesVersionKey|更新完成' "$SHOTLENS_APP" >/dev/null; then
   echo "App launch must not show automatic release/update reminder popups." >&2
@@ -107,6 +109,8 @@ if rg -n 'SelectionClient\(\)\.select|ShotLensSelect' "$SHOTLENS_APP" "$ROOT_DIR
 fi
 rg -n 'InProcessSelectionOverlay' "$SHOTLENS_APP" "$SELECTION_OVERLAY" >/dev/null
 rg -n 'OverlayLayoutPlanner\.plan' "$OVERLAY_WINDOW" >/dev/null
+rg -n 'sampledBackgroundColor' "$OVERLAY_WINDOW" >/dev/null
+rg -n 'resolvedTextColor' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'var best = minimumSize' "$OVERLAY_WINDOW" >/dev/null
 
 echo "Compact UI check passed."

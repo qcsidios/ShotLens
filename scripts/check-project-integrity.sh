@@ -10,11 +10,14 @@ required_files=(
   "$ROOT_DIR/ShotLens/Core/InProcessSelectionOverlay.swift"
   "$ROOT_DIR/ShotLens/Core/LLMTranslator.swift"
   "$ROOT_DIR/ShotLens/Core/LLMConnectionChecker.swift"
+  "$ROOT_DIR/ShotLens/Core/TranslationContentPlanner.swift"
   "$ROOT_DIR/ShotLens/Core/AppUpdater.swift"
   "$ROOT_DIR/ShotLens/Core/OverlayControlVisibility.swift"
   "$ROOT_DIR/ShotLens/Core/OverlayLayoutPlanner.swift"
   "$ROOT_DIR/ShotLens/Core/OverlayPinAppearance.swift"
   "$ROOT_DIR/Tests/TranslationEndpointSmoke.swift"
+  "$ROOT_DIR/Tests/TranslationContentPlannerSmoke.swift"
+  "$ROOT_DIR/Tests/OCRSelectionFilterSmoke.swift"
   "$ROOT_DIR/Tests/AppUpdaterSmoke.swift"
   "$ROOT_DIR/Tests/MultiDisplayCaptureSmoke.swift"
   "$ROOT_DIR/Tests/ClipboardManagerSmoke.swift"
@@ -24,6 +27,8 @@ required_files=(
   "$ROOT_DIR/Tests/OverlayGeometrySmoke.swift"
   "$ROOT_DIR/Tests/OverlayPinAppearanceSmoke.swift"
   "$ROOT_DIR/scripts/check-app-updater.sh"
+  "$ROOT_DIR/scripts/check-translation-content.sh"
+  "$ROOT_DIR/scripts/check-ocr-selection-filter.sh"
   "$ROOT_DIR/scripts/check-multi-display-capture.sh"
   "$ROOT_DIR/scripts/check-clipboard-capture.sh"
   "$ROOT_DIR/scripts/check-text-layout.sh"
@@ -60,6 +65,7 @@ if rg -n 'ShotLensSelect|SelectionClient' "$ROOT_DIR/scripts/build-local.sh" "$R
   exit 1
 fi
 rg -n 'LLMConnectionChecker.swift' "$ROOT_DIR/ShotLens.xcodeproj/project.pbxproj" >/dev/null
+rg -n 'TranslationContentPlanner.swift' "$ROOT_DIR/ShotLens.xcodeproj/project.pbxproj" >/dev/null
 rg -n 'AppUpdater.swift' "$ROOT_DIR/ShotLens.xcodeproj/project.pbxproj" >/dev/null
 rg -n 'OverlayControlVisibility.swift' "$ROOT_DIR/ShotLens.xcodeproj/project.pbxproj" >/dev/null
 rg -n 'OverlayLayoutPlanner.swift' "$ROOT_DIR/ShotLens.xcodeproj/project.pbxproj" >/dev/null

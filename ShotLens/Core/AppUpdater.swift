@@ -134,6 +134,16 @@ struct AppUpdater {
         return now.timeIntervalSince(lastCheckedAt) >= automaticCheckInterval
     }
 
+    static func canAutomaticallyInstall(appURL: URL = Bundle.main.bundleURL) -> Bool {
+        let parent = appURL.deletingLastPathComponent().standardizedFileURL
+        if parent.path == "/Applications" { return true }
+        let userApplications = FileManager.default.urls(
+            for: .applicationDirectory,
+            in: .userDomainMask
+        ).first?.standardizedFileURL
+        return parent == userApplications
+    }
+
     private static var bundleShortVersion: String {
         let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
         let normalized = shortVersion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -217,6 +227,9 @@ struct AppUpdater {
     test -x "$STAGING_APP/Contents/MacOS/ShotLens"
     xattr -cr "$STAGING_APP"
     /usr/bin/codesign --verify --deep --strict "$STAGING_APP"
+    CURRENT_REQUIREMENT="$(/usr/bin/codesign -dr - "$APP_PATH" 2>&1 | sed -n 's/^.*designated => //p')"
+    test -n "$CURRENT_REQUIREMENT"
+    /usr/bin/codesign --verify --deep --strict -R="$CURRENT_REQUIREMENT" "$STAGING_APP"
     mv "$APP_PATH" "$BACKUP_APP"
     if ! mv "$STAGING_APP" "$APP_PATH"; then
       restore_backup

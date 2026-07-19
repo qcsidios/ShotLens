@@ -10,17 +10,17 @@ ShotLens 是一个轻量级 macOS 菜单栏截图翻译工具。
 - 冻结屏幕后框选翻译区域
 - 松开鼠标完成框选后，自动把原始选区截图写入系统剪贴板
 - 基于 Apple Vision 的独立 OCR 辅助进程
-- 固定识别英文并翻译为简体中文，支持单词、缩写、句子、段落和文章
+- 固定把英文翻译为简体中文；已有中文不发送翻译，夹在中文之间的多段英文分别翻译后嵌回原文
 - 翻译缩写与简写时会参考同一选区内的其他文字进行语境消歧
 - 兼容 OpenAI 的 API 翻译，内置默认限免额度
 - 支持填写 `/v1`、`/v1/chat/completions`、`/v1/models` 等常见 API 地址形式
 - API 测试按钮会检查真实聊天补全端点，减少 `/models` 不可用和模型格式漂移造成的误报
 - 模型字段可选：填写时显式传入，留空时由 API 服务商使用默认行为
-- 针对 UI 文本、菜单、段落、文章和混合截图的布局感知渲染，译文严格在原 OCR 位置内呈现，避免跨区域重叠
+- 针对 UI 文本、菜单、段落、文章和混合截图的布局感知渲染，按原位置采样背景色覆盖原文，不再统一铺白底
 - 可拖动的结果浮窗，支持重试、原文/译文切换、复制截图和纯文本译文
 - 简洁控制台，用于查看权限、快捷键、开机启动和折叠式 API 设置
 - 应用图标与 macOS 菜单栏模板图标
-- 控制台内每天自动检查 GitHub Release 新版本，也可手动检查并升级
+- 安装在“应用程序”目录时，启动后自动检查、下载并安装 GitHub Release 新版本；开发副本只提示、不自动替换
 
 ## 系统要求
 
@@ -59,17 +59,17 @@ https://example.com/v1/models
 
 自备 API 面板里的“清空”和“恢复默认”含义不同：“清空”会完全清除地址、Key 和模型，不再使用默认限免；“恢复默认”会重新启用内置限免配置并隐藏 API 详情。
 
-翻译输入直接使用 JSON 文本数组，减少模型把内部索引混入译文。编号列表、带序号字符串数组、对象、代码块、常见箭头分隔、解释前缀、SSE 边缘残片或控制标记会在本地清洗并按原位置对齐。常规框选尽量保持一次翻译请求；若模型只漏译或误答少量项目，ShotLens 只对这些项目追加一次小批量补译，索引不明确或整体格式损坏时才执行一次整批修复，不递归重试或逐条放大请求。产品名、型号和标识符允许合理保留英文，普通英文原样返回仍会进入补译。
+翻译输入使用 JSON 文本数组。默认 SiliconFlow 接口启用 JSON 输出模式；使用 Xiaomi MiMo 官方接口时还会关闭思考输出、限制回复长度并使用官方 `api-key` 请求头，避免翻译前生成无用推理。编号列表、带序号字符串数组、对象、代码块、常见箭头分隔、解释前缀、SSE 边缘残片或控制标记会在本地清洗并按原位置对齐。常规框选保持一次请求；超大选区按容量分批，但每批只请求一次。模型漏译、误答或格式损坏时快速失败，不再串行追加网络修复。常见 UI 词会逐项在本地完成，只把未知文本发送给 API；同一 App 会话内完全相同的成功翻译最多缓存 128 批，退出后自动清空且不写入磁盘。产品名、型号和标识符允许合理保留英文。
 
 浮框里的“重新翻译”会复用当前框选截图重新执行 OCR 和翻译，不会再次截取屏幕，因此不会捕获已经显示的译文或要求用户重新框选。
 
-ShotLens 默认继续使用 macOS Vision 在本机 OCR：它能直接返回原位覆盖所需的逐块坐标，且不增加图片上传和第二次网络推理。SiliconFlow 的 `deepseek-ai/DeepSeek-OCR` 当前适合整页文本或 Markdown 提取，但没有被 ShotLens 主链路采用；只有在它提供稳定逐块坐标契约，并且隐私、网络成本和端到端延迟实测优于本地 Vision 时才重新评估。
+ShotLens 默认继续使用 macOS Vision 在本机 OCR：识别前会做轻量灰度、对比度和锐化增强，并只启用英文识别，减少中文、图标和符号造成的误判与语言检测开销；截图像素仍不上传。只有包含完整英文词且未触碰框选边缘的识别片段才进入翻译。Vision 能直接返回原位覆盖所需的逐块坐标，避免第二次网络推理。云端 OCR 只有在提供稳定逐块坐标契约，并且隐私、网络成本和端到端延迟实测优于本地 Vision 时才重新评估。
 
 用户自己填写的 API 地址、Key 和模型会保存在 macOS 用户配置中。升级 App 不会清空这些配置；只有点击“清空”或“恢复默认”才会主动改变 API 设置。
 
 ## 更新
 
-ShotLens 启动后会自动检查一次 GitHub Release，此后每满 24 小时自动检查；控制台版本号旁也保留“检测新版本”按钮。自动检查只在发现新版时显示版本提示和“升级”按钮，点击后会下载 `ShotLens-vX.Y.Z.dmg`，校验 App 身份和签名，再暂存、备份并替换当前 App。新版本无法启动时会恢复原 App。
+ShotLens 启动后会检查一次 GitHub Release。App 位于系统或用户“应用程序”目录时，发现新版会自动下载 `ShotLens-vX.Y.Z.dmg`，验证 bundle identifier、代码签名和与当前版本一致的指定签名要求，再暂存、备份、替换并重启；新版本无法启动时会恢复原 App。开发目录和临时目录中的副本只显示“升级”按钮，不会自动替换。运行期间仍每满 24 小时检查一次，但不会突然退出自动安装；控制台版本号旁保留手动检测和升级入口。
 
 如果无法访问 GitHub，App 内更新检查会显示无法连接更新服务器，不影响截图翻译。无法使用 GitHub 的用户请使用你提供的飞书发布文档手动下载安装包。
 
@@ -103,6 +103,8 @@ SHOTLENS_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" bash s
 
 ```bash
 bash scripts/check-translation-endpoint.sh
+bash scripts/check-translation-content.sh
+bash scripts/check-ocr-selection-filter.sh
 bash scripts/check-app-updater.sh
 bash scripts/check-multi-display-capture.sh
 bash scripts/check-clipboard-capture.sh
@@ -121,6 +123,8 @@ bash scripts/check-dmg-layout.sh
 其中：
 
 - `check-translation-endpoint.sh`：验证 API 地址规范化、翻译返回解析和连接测试链路。
+- `check-translation-content.sh`：验证纯中文排除、混合中英文拆分和译文嵌回原文。
+- `check-ocr-selection-filter.sh`：验证完整英文保留、中文间英文拆分，以及边界残字、标点和图标噪声排除。
 - `check-app-updater.sh`：验证 GitHub Release 新版本检测、版本比较和异常状态。
 - `check-multi-display-capture.sh`：验证鼠标所在显示器的独立截图与 Retina/外接屏缩放尺寸。
 - `check-clipboard-capture.sh`：验证框选完成后自动把原始选区截图写入剪贴板。

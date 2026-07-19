@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import CoreImage
 import ImageIO
 import Vision
 import Darwin
@@ -35,7 +36,8 @@ struct ShotLensOCR {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
-        request.minimumTextHeight = 0
+        request.automaticallyDetectsLanguage = false
+        request.minimumTextHeight = 0.004
         request.recognitionLanguages = ["en-US"]
         request.customWords = [
             "AI",
@@ -44,6 +46,7 @@ struct ShotLensOCR {
             "JSON",
             "GitHub",
             "ChatGPT",
+            "GPT-4o",
             "Claude",
             "Settings",
             "Search",
@@ -55,7 +58,8 @@ struct ShotLensOCR {
             "Upload"
         ]
 
-        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        let recognitionImage = enhancedRecognitionImage(from: image) ?? image
+        let handler = VNImageRequestHandler(cgImage: recognitionImage, options: [:])
         try handler.perform([request])
 
         guard let observations = request.results else {
@@ -63,14 +67,70 @@ struct ShotLensOCR {
         }
 
         let imageSize = CGSize(width: image.width, height: image.height)
-        return observations.compactMap { observation -> OCRBlockDTO? in
-            guard let candidate = observation.topCandidates(1).first else { return nil }
-            let boundingBox = observation.boundingBox.fromVisionNormalized(to: imageSize)
+        return observations.flatMap { observation -> [OCRBlockDTO] in
+            guard let candidate = bestCandidate(from: observation) else { return [] }
+            return englishBlocks(
+                from: candidate,
+                observation: observation,
+                image: image,
+                imageSize: imageSize
+            )
+        }
+    }
 
+    private static func bestCandidate(from observation: VNRecognizedTextObservation) -> VNRecognizedText? {
+        observation.topCandidates(5)
+            .filter { $0.string.hasCompleteEnglishToken }
+            .max { lhs, rhs in
+                candidateScore(lhs) < candidateScore(rhs)
+            }
+    }
+
+    private static func candidateScore(_ candidate: VNRecognizedText) -> Double {
+        let text = candidate.string
+        let hanCount = text.unicodeScalars.filter { scalar in
+            (0x3400...0x4DBF).contains(Int(scalar.value))
+                || (0x4E00...0x9FFF).contains(Int(scalar.value))
+                || (0xF900...0xFAFF).contains(Int(scalar.value))
+        }.count
+        let mixedLanguageBonus = text.containsLatinLetter && hanCount > 0 ? 100.0 : 0
+        return mixedLanguageBonus + Double(hanCount * 5) + Double(candidate.confidence)
+    }
+
+    private static func englishBlocks(
+        from candidate: VNRecognizedText,
+        observation: VNRecognizedTextObservation,
+        image: CGImage,
+        imageSize: CGSize
+    ) -> [OCRBlockDTO] {
+        let text = candidate.string
+        guard text.containsLatinLetter else { return [] }
+
+        let ranges = text.completeEnglishRanges
+        let blocks = ranges.compactMap { range -> OCRBlockDTO? in
+            let fragment = String(text[range])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(
+                    of: #"\bGPT-4[0O]\b"#,
+                    with: "GPT-4o",
+                    options: [.regularExpression, .caseInsensitive]
+                )
+            guard fragment.hasCompleteEnglishToken else { return nil }
+
+            let normalizedBox: CGRect
+            if range == text.startIndex..<text.endIndex {
+                normalizedBox = observation.boundingBox
+            } else if let fragmentObservation = try? candidate.boundingBox(for: range) {
+                normalizedBox = fragmentObservation.boundingBox
+            } else {
+                return nil
+            }
+            let boundingBox = normalizedBox.fromVisionNormalized(to: imageSize)
+            guard boundingBox.isSafelyInside(imageSize: imageSize) else { return nil }
             return OCRBlockDTO(
-                text: candidate.string,
+                text: fragment,
                 boundingBox: OCRRectDTO(rect: boundingBox),
-                detectedLanguage: detectLanguage(for: candidate.string),
+                detectedLanguage: "en",
                 visualStyle: estimateVisualStyle(
                     in: image,
                     boundingBox: boundingBox,
@@ -78,6 +138,25 @@ struct ShotLensOCR {
                 )
             )
         }
+        return blocks
+    }
+
+    /// 轻量提高低对比度浅色字的边缘，不改变尺寸，因此坐标仍可直接映射回原截图。
+    private static func enhancedRecognitionImage(from image: CGImage) -> CGImage? {
+        let input = CIImage(cgImage: image)
+        guard let colorControls = CIFilter(name: "CIColorControls"),
+              let sharpen = CIFilter(name: "CISharpenLuminance") else {
+            return nil
+        }
+        colorControls.setValue(input, forKey: kCIInputImageKey)
+        colorControls.setValue(0, forKey: kCIInputSaturationKey)
+        colorControls.setValue(1.35, forKey: kCIInputContrastKey)
+        guard let contrasted = colorControls.outputImage else { return nil }
+
+        sharpen.setValue(contrasted, forKey: kCIInputImageKey)
+        sharpen.setValue(0.35, forKey: kCIInputSharpnessKey)
+        guard let output = sharpen.outputImage else { return nil }
+        return CIContext(options: [.cacheIntermediates: false]).createCGImage(output, from: input.extent)
     }
 
     private static func estimateVisualStyle(
@@ -205,34 +284,6 @@ struct ShotLensOCR {
         return sorted[sorted.count / 2]
     }
 
-    private static func detectLanguage(for text: String) -> String {
-        let scalars = text.unicodeScalars
-        if scalars.contains(where: { (0x4E00...0x9FFF).contains(Int($0.value)) }) {
-            return "zh-Hans"
-        }
-
-        if scalars.contains(where: { (0x3040...0x30FF).contains(Int($0.value)) }) {
-            return "ja"
-        }
-
-        if scalars.contains(where: { (0xAC00...0xD7AF).contains(Int($0.value)) }) {
-            return "ko"
-        }
-
-        let letters = scalars.filter { CharacterSet.letters.contains($0) }
-        if !letters.isEmpty {
-            let latinLetters = letters.filter { scalar in
-                (65...90).contains(Int(scalar.value))
-                    || (97...122).contains(Int(scalar.value))
-                    || (0x00C0...0x024F).contains(Int(scalar.value))
-            }
-            if Double(latinLetters.count) / Double(letters.count) > 0.75 {
-                return "en"
-            }
-        }
-
-        return "und"
-    }
 }
 
 private struct OCRBlockDTO: Encodable {
@@ -305,5 +356,122 @@ private extension CGRect {
         let pixelWidth = size.width * imageSize.width
         let pixelHeight = size.height * imageSize.height
         return CGRect(x: pixelX, y: pixelY, width: pixelWidth, height: pixelHeight)
+    }
+
+    func isSafelyInside(imageSize: CGSize) -> Bool {
+        let edgeMargin = max(1, min(imageSize.width, imageSize.height) * 0.002)
+        return minX > edgeMargin
+            && minY > edgeMargin
+            && maxX < imageSize.width - edgeMargin
+            && maxY < imageSize.height - edgeMargin
+    }
+}
+
+private extension String {
+    var containsLatinLetter: Bool {
+        unicodeScalars.contains { scalar in
+            (65...90).contains(Int(scalar.value))
+                || (97...122).contains(Int(scalar.value))
+                || (0x00C0...0x024F).contains(Int(scalar.value))
+        }
+    }
+
+    var hasCompleteEnglishToken: Bool {
+        let tokens = split { character in
+            !character.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) }
+        }
+        return tokens.contains { token in
+            let value = String(token)
+            let latinCount = value.unicodeScalars.filter { scalar in
+                (65...90).contains(Int(scalar.value))
+                    || (97...122).contains(Int(scalar.value))
+                    || (0x00C0...0x024F).contains(Int(scalar.value))
+            }.count
+            if latinCount >= 2 { return true }
+            if value == "A" || value == "a" || value == "I" { return true }
+            return latinCount == 1
+                && value.unicodeScalars.contains(where: { CharacterSet.decimalDigits.contains($0) })
+        }
+    }
+
+    /// 只保留由完整英文词组成的片段。中文、图标、装饰符号以及 OCR 产生的孤立字母
+    /// 都是硬边界，不让它们进入翻译请求。
+    var completeEnglishRanges: [Range<String.Index>] {
+        var ranges: [Range<String.Index>] = []
+        var segmentStart = startIndex
+        var index = startIndex
+
+        func appendSegment(_ segment: Range<String.Index>) {
+            var tokens: [Range<String.Index>] = []
+            var tokenStart: String.Index?
+            var cursor = segment.lowerBound
+            while cursor < segment.upperBound {
+                let next = self.index(after: cursor)
+                if self[cursor].isLatinLetterOrDigit {
+                    if tokenStart == nil { tokenStart = cursor }
+                } else if let start = tokenStart {
+                    tokens.append(start..<cursor)
+                    tokenStart = nil
+                }
+                cursor = next
+            }
+            if let start = tokenStart { tokens.append(start..<segment.upperBound) }
+
+            var phraseStart: String.Index?
+            var phraseEnd: String.Index?
+            for token in tokens {
+                let tokenText = String(self[token])
+                if tokenText.hasCompleteEnglishToken {
+                    if phraseStart == nil { phraseStart = token.lowerBound }
+                    phraseEnd = token.upperBound
+                } else if phraseStart != nil,
+                          tokenText.unicodeScalars.allSatisfy({ CharacterSet.decimalDigits.contains($0) }) {
+                    phraseEnd = token.upperBound
+                } else if let start = phraseStart, let end = phraseEnd {
+                    ranges.append(start..<end)
+                    phraseStart = nil
+                    phraseEnd = nil
+                }
+            }
+            if let start = phraseStart, let end = phraseEnd {
+                ranges.append(start..<end)
+            }
+        }
+
+        while index < endIndex {
+            let next = self.index(after: index)
+            if self[index].isEnglishOCRBoundary {
+                if segmentStart < index { appendSegment(segmentStart..<index) }
+                segmentStart = next
+            }
+            index = next
+        }
+        if segmentStart < endIndex { appendSegment(segmentStart..<endIndex) }
+        return ranges
+    }
+}
+
+private extension Character {
+    var isLatinLetterOrDigit: Bool {
+        unicodeScalars.allSatisfy { scalar in
+            CharacterSet.decimalDigits.contains(scalar)
+                || (65...90).contains(Int(scalar.value))
+                || (97...122).contains(Int(scalar.value))
+                || (0x00C0...0x024F).contains(Int(scalar.value))
+        }
+    }
+
+    var isEnglishOCRBoundary: Bool {
+        if unicodeScalars.contains(where: { scalar in
+            (0x3400...0x4DBF).contains(Int(scalar.value))
+                || (0x4E00...0x9FFF).contains(Int(scalar.value))
+                || (0xF900...0xFAFF).contains(Int(scalar.value))
+        }) {
+            return true
+        }
+        if unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || CharacterSet.whitespacesAndNewlines.contains($0) }) {
+            return false
+        }
+        return !"'’-‐‑–—.,:;!?/\\%+&()[]{}".contains(self)
     }
 }

@@ -40,6 +40,7 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     private var updateTask: Task<Void, Never>?
     private var automaticUpdateCheckTimer: Timer?
     private var availableUpdate: AppUpdate?
+    private var didRunLaunchUpdateCheck = false
 
     private var pendingSave: DispatchWorkItem?
 
@@ -764,10 +765,10 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     // MARK: - 更新检查
 
     @objc private func checkForUpdatesClicked() {
-        startUpdateCheck(showsProgress: true)
+        startUpdateCheck(showsProgress: true, automaticallyInstalls: false)
     }
 
-    private func startUpdateCheck(showsProgress: Bool) {
+    private func startUpdateCheck(showsProgress: Bool, automaticallyInstalls: Bool) {
         updateTask?.cancel()
         availableUpdate = nil
         installUpdateButton.isHidden = true
@@ -782,12 +783,20 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
             let result = await AppUpdater().checkForUpdate()
             guard !Task.isCancelled, let controller = self else { return }
             await MainActor.run {
-                controller.applyUpdateCheckResult(result, showsProgress: showsProgress)
+                controller.applyUpdateCheckResult(
+                    result,
+                    showsProgress: showsProgress,
+                    automaticallyInstalls: automaticallyInstalls
+                )
             }
         }
     }
 
-    private func applyUpdateCheckResult(_ result: AppUpdateCheckResult, showsProgress: Bool) {
+    private func applyUpdateCheckResult(
+        _ result: AppUpdateCheckResult,
+        showsProgress: Bool,
+        automaticallyInstalls: Bool
+    ) {
         updateTask = nil
         if showsProgress {
             checkUpdateButton.isEnabled = true
@@ -799,6 +808,9 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
             updateStatusLabel?.stringValue = "发现 \(update.version)"
             updateStatusLabel?.textColor = .systemGreen
             installUpdateButton.isHidden = false
+            if automaticallyInstalls, AppUpdater.canAutomaticallyInstall() {
+                beginInstalling(update)
+            }
         case .upToDate:
             guard showsProgress else { return }
             availableUpdate = nil
@@ -815,7 +827,11 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
     }
 
     private func scheduleAutomaticUpdateChecks() {
-        performAutomaticUpdateCheckIfNeeded()
+        if !didRunLaunchUpdateCheck {
+            didRunLaunchUpdateCheck = true
+            UserDefaults.standard.set(Date(), forKey: Self.lastAutomaticUpdateCheckKey)
+            startUpdateCheck(showsProgress: false, automaticallyInstalls: true)
+        }
         guard automaticUpdateCheckTimer == nil else { return }
         automaticUpdateCheckTimer = Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { [weak self] _ in
             self?.performAutomaticUpdateCheckIfNeeded()
@@ -829,11 +845,15 @@ final class MainWindowController: NSObject, NSTextFieldDelegate {
         let now = Date()
         guard AppUpdater.shouldAutomaticallyCheck(lastCheckedAt: lastCheckedAt, now: now) else { return }
         defaults.set(now, forKey: Self.lastAutomaticUpdateCheckKey)
-        startUpdateCheck(showsProgress: false)
+        startUpdateCheck(showsProgress: false, automaticallyInstalls: false)
     }
 
     @objc private func installUpdateClicked() {
         guard let update = availableUpdate else { return }
+        beginInstalling(update)
+    }
+
+    private func beginInstalling(_ update: AppUpdate) {
         checkUpdateButton.isEnabled = false
         installUpdateButton.isEnabled = false
         updateStatusLabel?.stringValue = "下载中…"

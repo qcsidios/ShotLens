@@ -12,6 +12,7 @@ struct AppUpdaterSmoke {
         try await assertMissingDMGIsUnavailable(session: session)
         try await assertInvalidTagIsUnavailable(session: session)
         try assertAutomaticCheckSchedule()
+        try assertAutomaticInstallScope()
         try assertInstallerUsesStagingAndRollback()
 
         print("App updater smoke test passed.")
@@ -19,7 +20,7 @@ struct AppUpdaterSmoke {
 
     private static func assertInstallerUsesStagingAndRollback() throws {
         let script = AppUpdater.updaterScript
-        for required in ["STAGING_APP=", "BACKUP_APP=", "codesign --verify", "CFBundleIdentifier", "restore_backup", "ditto \"$SOURCE_APP\" \"$STAGING_APP\""] {
+        for required in ["STAGING_APP=", "BACKUP_APP=", "codesign --verify", "CFBundleIdentifier", "CURRENT_REQUIREMENT=", "-R=\"$CURRENT_REQUIREMENT\"", "restore_backup", "ditto \"$SOURCE_APP\" \"$STAGING_APP\""] {
             guard script.contains(required) else {
                 throw TestFailure("Expected updater rollback contract to contain: \(required)")
             }
@@ -50,6 +51,19 @@ struct AppUpdaterSmoke {
             now: now
         ) else {
             throw TestFailure("Expected automatic update check after 24 hours")
+        }
+    }
+
+    private static func assertAutomaticInstallScope() throws {
+        guard AppUpdater.canAutomaticallyInstall(
+            appURL: URL(fileURLWithPath: "/Applications/ShotLens.app")
+        ) else {
+            throw TestFailure("Expected installed apps in /Applications to auto-update")
+        }
+        guard !AppUpdater.canAutomaticallyInstall(
+            appURL: URL(fileURLWithPath: "/tmp/ShotLens.app")
+        ) else {
+            throw TestFailure("Development or temporary app copies must not auto-update")
         }
     }
 
