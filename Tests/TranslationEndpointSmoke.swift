@@ -11,6 +11,7 @@ struct TranslationEndpointSmoke {
             expectedPath: "/v1/chat/completions"
         )
         try await assertXiaomiMiMoUsesDirectStructuredTranslation()
+        try await assertDeepSeekUsesNonThinkingPlainTranslation()
         try await assertTranslates(
             endpoint: "https://shotlens-test.local/v1/",
             expectedPath: "/v1/chat/completions"
@@ -91,6 +92,10 @@ struct TranslationEndpointSmoke {
         try await assertMissingIndexedItemFailsWithoutSecondRequest()
         try await assertPartialIndexedObjectKeepsAvailableItems()
         try await assertSingleMiddleIndexedObjectKeepsItsPosition()
+        try await assertNestedMetadataDoesNotDiscardTranslations()
+        try await assertNestedArrayDoesNotDiscardTranslations()
+        try await assertIncompleteJSONObjectKeepsIndexedTranslations()
+        try await assertExistingChineseMustBePreserved()
         try await assertProductIdentifierMayRemainUntranslated()
         try await assertPunctuatedIndexedJSONStaysSingleRequest()
         try await assertUntranslatedSentenceFailsWithoutSecondRequest()
@@ -153,12 +158,34 @@ struct TranslationEndpointSmoke {
         let body = MockOpenAIProtocol.requestBodies.first ?? ""
         guard body.contains(#""thinking":{"type":"disabled"}"#),
               body.contains("max_completion_tokens"),
-              body.contains("response_format"),
-              body.contains("json_object") else {
-            throw TestFailure("Expected MiMo request to disable thinking and enforce structured output: \(body)")
+              !body.contains("response_format") else {
+            throw TestFailure("Expected MiMo request to disable thinking and use numbered text: \(body)")
         }
         guard MockOpenAIProtocol.apiKeyHeaders == ["mimo-test-key"] else {
             throw TestFailure("Expected official MiMo api-key header")
+        }
+    }
+
+    private static func assertDeepSeekUsesNonThinkingPlainTranslation() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = "0\t你好\n1\t世界"
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://api.deepseek.com",
+            apiKey: "deepseek-test-key",
+            model: "deepseek-v4-flash",
+            defaultFallbackEnabled: false
+        ))
+
+        let result = try await translator.translate(["Hello", "World"], from: "en", to: "zh-Hans")
+        guard result == ["你好", "世界"] else {
+            throw TestFailure("Unexpected DeepSeek translations: \(result)")
+        }
+        let body = MockOpenAIProtocol.requestBodies.first ?? ""
+        guard body.contains(#""thinking":{"type":"disabled"}"#),
+              body.contains("max_tokens"),
+              body.contains(#"0\tHello"#),
+              !body.contains("response_format") else {
+            throw TestFailure("Expected DeepSeek non-thinking numbered request: \(body)")
         }
     }
 
@@ -207,9 +234,10 @@ struct TranslationEndpointSmoke {
         }
         let firstBody = MockOpenAIProtocol.requestBodies.first ?? ""
         guard firstBody.contains("Hunyuan-MT-7B"),
-              firstBody.contains("response_format"),
-              firstBody.contains("json_object") else {
-            throw TestFailure("Expected default SiliconFlow payload to request structured JSON, got: \(firstBody)")
+              firstBody.contains(#"0\tHello"#),
+              firstBody.contains("one tab"),
+              !firstBody.contains("response_format") else {
+            throw TestFailure("Expected default SiliconFlow payload to use numbered text, got: \(firstBody)")
         }
     }
 
@@ -608,13 +636,12 @@ struct TranslationEndpointSmoke {
             throw TestFailure("Expected abbreviation translation to use surrounding OCR context, got \(result)")
         }
         let body = MockOpenAIProtocol.requestBodies.first ?? ""
-        guard body.contains("Use all items as context"),
+        guard body.contains("Use the whole batch as context"),
               body.contains("CRM"),
               body.contains("Customer relationship management platform"),
-              body.contains(#"\"items\""#),
-              body.contains(#"\"0\":\"CRM\""#),
-              !body.contains(#"\"texts\""#) else {
-            throw TestFailure("Expected one contextual numeric-id request containing the abbreviation and nearby text")
+              body.contains(#"0\tCRM"#),
+              !body.contains(#"\"items\""#) else {
+            throw TestFailure("Expected one contextual numbered-text request containing the abbreviation and nearby text")
         }
     }
 
@@ -675,8 +702,8 @@ struct TranslationEndpointSmoke {
             throw TestFailure("Expected indexed JSON strings to align locally, got \(result)")
         }
         guard MockOpenAIProtocol.requestBodies.count == 1,
-              !(MockOpenAIProtocol.requestBodies[0].contains("format=index")) else {
-            throw TestFailure("Expected a single JSON-array input request without TSV index protocol")
+              MockOpenAIProtocol.requestBodies[0].contains(#"0\tProduct release update"#) else {
+            throw TestFailure("Expected a single numbered-text input request")
         }
     }
 
@@ -755,6 +782,80 @@ struct TranslationEndpointSmoke {
         }
         guard MockOpenAIProtocol.requestBodies.count == 1 else {
             throw TestFailure("A single valid partial item must not trigger another request")
+        }
+    }
+
+    private static func assertNestedMetadataDoesNotDiscardTranslations() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = #"{"source_language":"en","items":{"3":"适用场景","0":"独立分析","2":"选择模型","1":"人工智能分析","target_language":"zh-Hans"}}"#
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(
+            ["Independent analysis", "AI analysis", "Choose a model", "Use cases"],
+            from: "en",
+            to: "zh-Hans"
+        )
+        guard result == ["独立分析", "人工智能分析", "选择模型", "适用场景"] else {
+            throw TestFailure("Nested metadata discarded valid translations: \(result)")
+        }
+    }
+
+    private static func assertNestedArrayDoesNotDiscardTranslations() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = #"{"items":[{"1":"速度","0":"亮点","2":"每项任务的成本"},{"source_language":"en","target_language":"zh-Hans"}]}"#
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(
+            ["Highlights", "Speed", "Cost per Task"],
+            from: "en",
+            to: "zh-Hans"
+        )
+        guard result == ["亮点", "速度", "每项任务的成本"] else {
+            throw TestFailure("Nested array discarded valid translations: \(result)")
+        }
+    }
+
+    private static func assertIncompleteJSONObjectKeepsIndexedTranslations() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = #"{"items":{"0":"模型推荐","1":"平台支持""#
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        let result = try await translator.translate(
+            ["Model recommendation", "Platform support"],
+            from: "en",
+            to: "zh-Hans"
+        )
+        guard result == ["模型推荐", "平台支持"] else {
+            throw TestFailure("Incomplete JSON lost recoverable translations: \(result)")
+        }
+    }
+
+    private static func assertExistingChineseMustBePreserved() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = "0\t删除原有中文后的英语"
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+        do {
+            _ = try await translator.translate(["保留中文 English"], from: "en", to: "zh-Hans")
+            throw TestFailure("Expected altered Chinese source text to be rejected")
+        } catch is TestFailure {
+            throw TestFailure("Expected altered Chinese source text to be rejected")
+        } catch {
+            guard MockOpenAIProtocol.requestBodies.count == 1 else {
+                throw TestFailure("Chinese-preservation failure must not trigger another request")
+            }
         }
     }
 
@@ -884,6 +985,7 @@ private final class MockOpenAIProtocol: URLProtocol {
         request.url?.host == "shotlens-test.local"
             || request.url?.host == "api.siliconflow.cn"
             || request.url?.host == "api.xiaomimimo.com"
+            || request.url?.host == "api.deepseek.com"
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
@@ -909,7 +1011,7 @@ private final class MockOpenAIProtocol: URLProtocol {
         let statusCode: Int
         if !Self.statusCodeQueue.isEmpty {
             statusCode = Self.statusCodeQueue.removeFirst()
-        } else if path == "/v1/chat/completions" {
+        } else if path == "/v1/chat/completions" || path == "/chat/completions" {
             statusCode = Self.chatStatusCode
         } else if path == "/v1/models" {
             statusCode = Self.modelsStatusCode

@@ -8,6 +8,7 @@ struct OverlayGeometrySmoke {
         try assertPixelRectKeepsExactTopLeftAnchor()
         try assertTextRemovalPreservesBackgroundVariation()
         try assertTextRemovalSurvivesImperfectForegroundEstimate()
+        try assertAdjacentTextDoesNotContaminateRestoration()
 
         print("Overlay geometry smoke test passed.")
     }
@@ -83,6 +84,41 @@ struct OverlayGeometrySmoke {
         }
         guard redValues.count >= 12 else {
             throw TestFailure("Background reconstruction collapsed into a flat color block")
+        }
+    }
+
+    private static func assertAdjacentTextDoesNotContaminateRestoration() throws {
+        let width = 80
+        let height = 80
+        var pixels = [UInt8](repeating: 255, count: width * height * 4)
+        for index in stride(from: 3, to: pixels.count, by: 4) { pixels[index] = 255 }
+        func paintBlack(xRange: ClosedRange<Int>, yRange: ClosedRange<Int>) {
+            for y in yRange {
+                for x in xRange {
+                    let index = (y * width + x) * 4
+                    pixels[index] = 0
+                    pixels[index + 1] = 0
+                    pixels[index + 2] = 0
+                }
+            }
+        }
+        paintBlack(xRange: 30...50, yRange: 35...45)
+        paintBlack(xRange: 35...38, yRange: 23...24)
+        paintBlack(xRange: 35...38, yRange: 56...57)
+        let image = try makeImage(width: width, height: height, pixels: pixels)
+        guard let patch = OverlayTextBackgroundRestorer.restoredPatch(
+            from: image,
+            pixelRect: CGRect(x: 20, y: 25, width: 40, height: 30),
+            sourceStyle: .unknown
+        ) else {
+            throw TestFailure("Expected a reconstructed patch around adjacent text")
+        }
+        let restored = try rgbaPixels(from: patch)
+        let containsDarkStripe = stride(from: 0, to: restored.count, by: 4).contains { index in
+            restored[index] < 32 && restored[index + 1] < 32 && restored[index + 2] < 32
+        }
+        guard !containsDarkStripe else {
+            throw TestFailure("Adjacent rows contaminated the reconstructed background")
         }
     }
 

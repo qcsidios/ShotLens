@@ -37,18 +37,14 @@ struct OCRSelectionFilterSmoke {
         guard texts.contains(where: { $0.contains("GPT-4o API v2.5") }) else {
             throw TestFailure("Technical identifiers were changed or omitted: \(texts)")
         }
-        guard texts.contains("English"), texts.contains("More") else {
-            throw TestFailure("English fragments between Chinese were not separated: \(texts)")
+        guard texts.contains(where: { $0.contains("English") && $0.contains("More") }) else {
+            throw TestFailure("Mixed-language lines must retain their complete context: \(texts)")
         }
         guard !texts.contains(where: { $0.localizedCaseInsensitiveContains("boundary") }) else {
             throw TestFailure("Text clipped by the selection boundary must be ignored: \(texts)")
         }
-        guard texts.allSatisfy({ text in
-            text.unicodeScalars.contains { scalar in
-                (65...90).contains(Int(scalar.value)) || (97...122).contains(Int(scalar.value))
-            }
-        }) else {
-            throw TestFailure("Non-English OCR noise must be excluded: \(texts)")
+        guard !texts.contains(where: { $0 == "● ± □" }) else {
+            throw TestFailure("Pure icon and symbol noise must be excluded: \(texts)")
         }
 
         print("OCR selection filter smoke test passed.")

@@ -456,13 +456,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         ShotLensLogger.log(String(format: "OCR 完成，识别 %d 个文本块，耗时 %.2fs", textBlocks.count, Date().timeIntervalSince(ocrStartedAt)))
-        let orderedBlocks = textBlocks.sorted { lhs, rhs in
-            if abs(lhs.boundingBox.minY - rhs.boundingBox.minY) > 8 {
-                return lhs.boundingBox.minY < rhs.boundingBox.minY
-            }
-            return lhs.boundingBox.minX < rhs.boundingBox.minX
-        }
-        let contentPlan = TranslationContentPlan.make(from: orderedBlocks)
+        let semanticBlocks = SemanticTextGrouper.merge(textBlocks)
+        ShotLensLogger.log("语义分组完成，\(textBlocks.count) 个 OCR 行合并为 \(semanticBlocks.count) 个文本块")
+        let contentPlan = TranslationContentPlan.make(from: semanticBlocks)
         guard !contentPlan.sourceTexts.isEmpty else {
             ShotLensLogger.log("选区内没有需要翻译的英文")
             overlay?.setMessage("未识别到英文")

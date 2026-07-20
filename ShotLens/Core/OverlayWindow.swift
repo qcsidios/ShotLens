@@ -1078,13 +1078,16 @@ private final class OverlayPinButton: NSControl {
 
 enum OverlayTextBackgroundRestorer {
     static func restorationPixelRect(for pixelRect: CGRect, imageSize: CGSize) -> CGRect {
-        pixelRect.integral.intersection(CGRect(origin: .zero, size: imageSize))
+        pixelRect
+            .insetBy(dx: -1, dy: -1)
+            .integral
+            .intersection(CGRect(origin: .zero, size: imageSize))
     }
 
     static func restoredPatch(
         from image: CGImage,
         pixelRect: CGRect,
-        sourceStyle: TextBlockVisualStyle
+        sourceStyle _: TextBlockVisualStyle
     ) -> CGImage? {
         let imageSize = CGSize(width: image.width, height: image.height)
         let targetRect = restorationPixelRect(for: pixelRect, imageSize: imageSize)
@@ -1100,7 +1103,7 @@ enum OverlayTextBackgroundRestorer {
         let sampleWidth = crop.width
         let sampleHeight = crop.height
         guard sampleWidth > 0, sampleHeight > 0,
-              var samplePixels = rgbaPixels(from: crop) else { return nil }
+              let samplePixels = rgbaPixels(from: crop) else { return nil }
 
         let targetWidth = Int(targetRect.width)
         let targetHeight = Int(targetRect.height)
@@ -1112,75 +1115,51 @@ enum OverlayTextBackgroundRestorer {
               offsetY + targetHeight <= sampleHeight else { return nil }
 
         var output = [UInt8](repeating: 0, count: targetWidth * targetHeight * 4)
-        var mask = [Bool](repeating: false, count: targetWidth * targetHeight)
-        let foreground = (
-            red: Double(sourceStyle.foregroundRed),
-            green: Double(sourceStyle.foregroundGreen),
-            blue: Double(sourceStyle.foregroundBlue)
-        )
-        let hasForegroundEstimate = sourceStyle.foregroundLuminance >= 0
         let topSampleY = max(0, offsetY - 1)
         let bottomSampleY = min(sampleHeight - 1, offsetY + targetHeight)
+        let leftSampleX = max(0, offsetX - 1)
+        let rightSampleX = min(sampleWidth - 1, offsetX + targetWidth)
+        let cornerIndexes = [
+            0,
+            (sampleWidth - 1) * 4,
+            ((sampleHeight - 1) * sampleWidth) * 4,
+            ((sampleHeight * sampleWidth) - 1) * 4
+        ]
+        let reference = averageColor(at: cornerIndexes, pixels: samplePixels)
 
         for y in 0..<targetHeight {
-            let interpolation = targetHeight == 1 ? 0.5 : Double(y) / Double(targetHeight - 1)
+            let verticalAmount = targetHeight == 1 ? 0.5 : Double(y) / Double(targetHeight - 1)
             for x in 0..<targetWidth {
                 let sampleX = offsetX + x
-                let sourceIndex = ((offsetY + y) * sampleWidth + sampleX) * 4
-                let outputIndex = (y * targetWidth + x) * 4
-                output[outputIndex] = samplePixels[sourceIndex]
-                output[outputIndex + 1] = samplePixels[sourceIndex + 1]
-                output[outputIndex + 2] = samplePixels[sourceIndex + 2]
-                output[outputIndex + 3] = samplePixels[sourceIndex + 3]
-
                 let topIndex = (topSampleY * sampleWidth + sampleX) * 4
                 let bottomIndex = (bottomSampleY * sampleWidth + sampleX) * 4
-                let predicted = interpolatedColor(
+                let vertical = interpolatedColor(
                     pixels: samplePixels,
                     topIndex: topIndex,
                     bottomIndex: bottomIndex,
-                    amount: interpolation
+                    amount: verticalAmount
                 )
-                let current = (
-                    red: Double(samplePixels[sourceIndex]) / 255,
-                    green: Double(samplePixels[sourceIndex + 1]) / 255,
-                    blue: Double(samplePixels[sourceIndex + 2]) / 255
-                )
-                let backgroundDistance = colorDistance(current, predicted)
-                let luminanceDifference = abs(luminance(current) - luminance(predicted))
-                let foregroundDistance = colorDistance(current, foreground)
-                let obviousGlyph = backgroundDistance >= 0.22 || luminanceDifference >= 0.12
-                let likelyGlyph = hasForegroundEstimate
-                    ? luminanceDifference >= 0.035
-                        && (foregroundDistance <= backgroundDistance + 0.12 || obviousGlyph)
-                    : luminanceDifference >= 0.14
-                mask[y * targetWidth + x] = likelyGlyph
-            }
-        }
-
-        let originalMask = mask
-        for y in 0..<targetHeight {
-            for x in 0..<targetWidth where originalMask[y * targetWidth + x] {
-                for neighborY in max(0, y - 1)...min(targetHeight - 1, y + 1) {
-                    for neighborX in max(0, x - 1)...min(targetWidth - 1, x + 1) {
-                        mask[neighborY * targetWidth + neighborX] = true
-                    }
-                }
-            }
-        }
-
-        for y in 0..<targetHeight {
-            let interpolation = targetHeight == 1 ? 0.5 : Double(y) / Double(targetHeight - 1)
-            for x in 0..<targetWidth where mask[y * targetWidth + x] {
-                let sampleX = offsetX + x
-                let topIndex = (topSampleY * sampleWidth + sampleX) * 4
-                let bottomIndex = (bottomSampleY * sampleWidth + sampleX) * 4
-                let predicted = interpolatedColor(
+                let sampleY = offsetY + y
+                let leftIndex = (sampleY * sampleWidth + leftSampleX) * 4
+                let rightIndex = (sampleY * sampleWidth + rightSampleX) * 4
+                let horizontalAmount = targetWidth == 1 ? 0.5 : Double(x) / Double(targetWidth - 1)
+                let horizontal = interpolatedColor(
                     pixels: samplePixels,
-                    topIndex: topIndex,
-                    bottomIndex: bottomIndex,
-                    amount: interpolation
+                    topIndex: leftIndex,
+                    bottomIndex: rightIndex,
+                    amount: horizontalAmount
                 )
+                let verticalBoundaryDistance = colorDistance(
+                    color(at: topIndex, pixels: samplePixels),
+                    color(at: bottomIndex, pixels: samplePixels)
+                )
+                let horizontalBoundaryDistance = colorDistance(
+                    color(at: leftIndex, pixels: samplePixels),
+                    color(at: rightIndex, pixels: samplePixels)
+                )
+                let verticalScore = verticalBoundaryDistance + colorDistance(vertical, reference) * 0.35
+                let horizontalScore = horizontalBoundaryDistance + colorDistance(horizontal, reference) * 0.35
+                let predicted = verticalScore <= horizontalScore ? vertical : horizontal
                 let outputIndex = (y * targetWidth + x) * 4
                 output[outputIndex] = UInt8((predicted.red * 255).rounded().clamped(to: 0...255))
                 output[outputIndex + 1] = UInt8((predicted.green * 255).rounded().clamped(to: 0...255))
@@ -1188,7 +1167,6 @@ enum OverlayTextBackgroundRestorer {
                 output[outputIndex + 3] = 255
             }
         }
-        samplePixels.removeAll(keepingCapacity: false)
         return makeImage(width: targetWidth, height: targetHeight, pixels: output)
     }
 
@@ -1255,8 +1233,28 @@ enum OverlayTextBackgroundRestorer {
         return sqrt(red * red + green * green + blue * blue)
     }
 
-    private static func luminance(_ color: (red: Double, green: Double, blue: Double)) -> Double {
-        0.2126 * color.red + 0.7152 * color.green + 0.0722 * color.blue
+    private static func color(
+        at index: Int,
+        pixels: [UInt8]
+    ) -> (red: Double, green: Double, blue: Double) {
+        (
+            red: Double(pixels[index]) / 255,
+            green: Double(pixels[index + 1]) / 255,
+            blue: Double(pixels[index + 2]) / 255
+        )
+    }
+
+    private static func averageColor(
+        at indexes: [Int],
+        pixels: [UInt8]
+    ) -> (red: Double, green: Double, blue: Double) {
+        let colors = indexes.map { color(at: $0, pixels: pixels) }
+        let count = Double(max(1, colors.count))
+        return (
+            red: colors.reduce(0) { $0 + $1.red } / count,
+            green: colors.reduce(0) { $0 + $1.green } / count,
+            blue: colors.reduce(0) { $0 + $1.blue } / count
+        )
     }
 }
 

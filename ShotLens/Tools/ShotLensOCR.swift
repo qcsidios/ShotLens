@@ -33,22 +33,47 @@ struct ShotLensOCR {
             throw OCRToolError.unreadableImage
         }
 
-        if let enhanced = enhancedRecognitionImage(from: image) {
-            let enhancedBlocks = try recognizeEnglishBlocks(in: enhanced, sourceImage: image)
-            if !enhancedBlocks.isEmpty {
-                return enhancedBlocks
-            }
+        let originalBlocks = try recognizeTextBlocks(in: image, sourceImage: image)
+        guard let enhanced = enhancedRecognitionImage(from: image) else {
+            return originalBlocks
         }
-        return try recognizeEnglishBlocks(in: image, sourceImage: image)
+        let enhancedBlocks = try recognizeTextBlocks(in: enhanced, sourceImage: image)
+        return mergeRecognitionPasses(primary: originalBlocks, supplemental: enhancedBlocks)
     }
 
-    private static func recognizeEnglishBlocks(in recognitionImage: CGImage, sourceImage: CGImage) throws -> [OCRBlockDTO] {
+    /// 原图结果优先，增强图只补回浅色漏字；只有置信度显著更高时才替换同位置结果。
+    private static func mergeRecognitionPasses(
+        primary: [OCRBlockDTO],
+        supplemental: [OCRBlockDTO]
+    ) -> [OCRBlockDTO] {
+        var merged = primary
+        for candidate in supplemental {
+            if let index = merged.indices.first(where: {
+                merged[$0].boundingBox.rect.overlapRatio(with: candidate.boundingBox.rect) >= 0.55
+            }) {
+                if candidate.visualStyle.confidence >= merged[index].visualStyle.confidence + 0.08 {
+                    merged[index] = candidate
+                }
+            } else {
+                merged.append(candidate)
+            }
+        }
+        return merged.sorted {
+            let tolerance = max(6, min($0.boundingBox.height, $1.boundingBox.height) * 0.35)
+            if abs($0.boundingBox.y - $1.boundingBox.y) > tolerance {
+                return $0.boundingBox.y < $1.boundingBox.y
+            }
+            return $0.boundingBox.x < $1.boundingBox.x
+        }
+    }
+
+    private static func recognizeTextBlocks(in recognitionImage: CGImage, sourceImage: CGImage) throws -> [OCRBlockDTO] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
         request.automaticallyDetectsLanguage = false
         request.minimumTextHeight = 0.004
-        request.recognitionLanguages = ["en-US"]
+        request.recognitionLanguages = ["en-US", "zh-Hans"]
         request.customWords = [
             "AI",
             "API",
@@ -77,9 +102,9 @@ struct ShotLensOCR {
         }
 
         let imageSize = CGSize(width: sourceImage.width, height: sourceImage.height)
-        return observations.flatMap { observation -> [OCRBlockDTO] in
-            guard let candidate = bestCandidate(from: observation) else { return [] }
-            return englishBlocks(
+        return observations.compactMap { observation -> OCRBlockDTO? in
+            guard let candidate = bestCandidate(from: observation) else { return nil }
+            return textBlock(
                 from: candidate,
                 observation: observation,
                 image: sourceImage,
@@ -90,65 +115,37 @@ struct ShotLensOCR {
 
     private static func bestCandidate(from observation: VNRecognizedTextObservation) -> VNRecognizedText? {
         observation.topCandidates(5)
-            .filter { $0.string.hasCompleteEnglishToken }
-            .max { lhs, rhs in
-                candidateScore(lhs) < candidateScore(rhs)
-            }
+            .filter { $0.string.hasMeaningfulOCRContent }
+            .max { $0.confidence < $1.confidence }
     }
 
-    private static func candidateScore(_ candidate: VNRecognizedText) -> Double {
-        let text = candidate.string
-        let hanCount = text.unicodeScalars.filter { scalar in
-            (0x3400...0x4DBF).contains(Int(scalar.value))
-                || (0x4E00...0x9FFF).contains(Int(scalar.value))
-                || (0xF900...0xFAFF).contains(Int(scalar.value))
-        }.count
-        let mixedLanguageBonus = text.containsLatinLetter && hanCount > 0 ? 100.0 : 0
-        return mixedLanguageBonus + Double(hanCount * 5) + Double(candidate.confidence)
-    }
-
-    private static func englishBlocks(
+    private static func textBlock(
         from candidate: VNRecognizedText,
         observation: VNRecognizedTextObservation,
         image: CGImage,
         imageSize: CGSize
-    ) -> [OCRBlockDTO] {
+    ) -> OCRBlockDTO? {
         let text = candidate.string
-        guard text.containsLatinLetter else { return [] }
-
-        let ranges = text.completeEnglishRanges
-        let blocks = ranges.compactMap { range -> OCRBlockDTO? in
-            let fragment = String(text[range])
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .replacingOccurrences(
-                    of: #"\bGPT-4[0O]\b"#,
-                    with: "GPT-4o",
-                    options: [.regularExpression, .caseInsensitive]
-                )
-            guard fragment.hasCompleteEnglishToken else { return nil }
-
-            let normalizedBox: CGRect
-            if range == text.startIndex..<text.endIndex {
-                normalizedBox = observation.boundingBox
-            } else if let fragmentObservation = try? candidate.boundingBox(for: range) {
-                normalizedBox = fragmentObservation.boundingBox
-            } else {
-                return nil
-            }
-            let boundingBox = normalizedBox.fromVisionNormalized(to: imageSize)
-            guard boundingBox.isSafelyInside(imageSize: imageSize) else { return nil }
-            return OCRBlockDTO(
-                text: fragment,
-                boundingBox: OCRRectDTO(rect: boundingBox),
-                detectedLanguage: "en",
-                visualStyle: estimateVisualStyle(
-                    in: image,
-                    boundingBox: boundingBox,
-                    confidence: candidate.confidence
-                )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(
+                of: #"\bGPT-4[0O]\b"#,
+                with: "GPT-4o",
+                options: [.regularExpression, .caseInsensitive]
             )
-        }
-        return blocks
+        guard text.hasMeaningfulOCRContent else { return nil }
+
+        let boundingBox = observation.boundingBox.fromVisionNormalized(to: imageSize)
+        guard boundingBox.isSafelyInside(imageSize: imageSize) else { return nil }
+        return OCRBlockDTO(
+            text: text,
+            boundingBox: OCRRectDTO(rect: boundingBox),
+            detectedLanguage: text.containsHanCharacter ? "mixed" : "en",
+            visualStyle: estimateVisualStyle(
+                in: image,
+                boundingBox: boundingBox,
+                confidence: candidate.confidence
+            )
+        )
     }
 
     /// 轻量提高低对比度浅色字的边缘，不改变尺寸，因此坐标仍可直接映射回原截图。
@@ -343,6 +340,10 @@ private struct OCRRectDTO: Encodable {
         width = rect.width
         height = rect.height
     }
+
+    var rect: CGRect {
+        CGRect(x: x, y: y, width: width, height: height)
+    }
 }
 
 private enum OCRToolError: LocalizedError {
@@ -360,6 +361,13 @@ private enum OCRToolError: LocalizedError {
 }
 
 private extension CGRect {
+    func overlapRatio(with other: CGRect) -> CGFloat {
+        let intersection = intersection(other)
+        guard !intersection.isNull else { return 0 }
+        let minimumArea = min(width * height, other.width * other.height)
+        return minimumArea > 0 ? intersection.width * intersection.height / minimumArea : 0
+    }
+
     func fromVisionNormalized(to imageSize: CGSize) -> CGRect {
         let pixelX = origin.x * imageSize.width
         let pixelY = (1.0 - origin.y - size.height) * imageSize.height
@@ -386,102 +394,17 @@ private extension String {
         }
     }
 
-    var hasCompleteEnglishToken: Bool {
-        let tokens = split { character in
-            !character.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) }
-        }
-        return tokens.contains { token in
-            let value = String(token)
-            let latinCount = value.unicodeScalars.filter { scalar in
-                (65...90).contains(Int(scalar.value))
-                    || (97...122).contains(Int(scalar.value))
-                    || (0x00C0...0x024F).contains(Int(scalar.value))
-            }.count
-            if latinCount >= 2 { return true }
-            if value == "A" || value == "a" || value == "I" { return true }
-            return latinCount == 1
-                && value.unicodeScalars.contains(where: { CharacterSet.decimalDigits.contains($0) })
-        }
-    }
-
-    /// 只保留由完整英文词组成的片段。中文、图标、装饰符号以及 OCR 产生的孤立字母
-    /// 都是硬边界，不让它们进入翻译请求。
-    var completeEnglishRanges: [Range<String.Index>] {
-        var ranges: [Range<String.Index>] = []
-        var segmentStart = startIndex
-        var index = startIndex
-
-        func appendSegment(_ segment: Range<String.Index>) {
-            var tokens: [Range<String.Index>] = []
-            var tokenStart: String.Index?
-            var cursor = segment.lowerBound
-            while cursor < segment.upperBound {
-                let next = self.index(after: cursor)
-                if self[cursor].isLatinLetterOrDigit {
-                    if tokenStart == nil { tokenStart = cursor }
-                } else if let start = tokenStart {
-                    tokens.append(start..<cursor)
-                    tokenStart = nil
-                }
-                cursor = next
-            }
-            if let start = tokenStart { tokens.append(start..<segment.upperBound) }
-
-            var phraseStart: String.Index?
-            var phraseEnd: String.Index?
-            for token in tokens {
-                let tokenText = String(self[token])
-                if tokenText.hasCompleteEnglishToken {
-                    if phraseStart == nil { phraseStart = token.lowerBound }
-                    phraseEnd = token.upperBound
-                } else if phraseStart != nil,
-                          tokenText.unicodeScalars.allSatisfy({ CharacterSet.decimalDigits.contains($0) }) {
-                    phraseEnd = token.upperBound
-                } else if let start = phraseStart, let end = phraseEnd {
-                    ranges.append(start..<end)
-                    phraseStart = nil
-                    phraseEnd = nil
-                }
-            }
-            if let start = phraseStart, let end = phraseEnd {
-                ranges.append(start..<end)
-            }
-        }
-
-        while index < endIndex {
-            let next = self.index(after: index)
-            if self[index].isEnglishOCRBoundary {
-                if segmentStart < index { appendSegment(segmentStart..<index) }
-                segmentStart = next
-            }
-            index = next
-        }
-        if segmentStart < endIndex { appendSegment(segmentStart..<endIndex) }
-        return ranges
-    }
-}
-
-private extension Character {
-    var isLatinLetterOrDigit: Bool {
-        unicodeScalars.allSatisfy { scalar in
-            CharacterSet.decimalDigits.contains(scalar)
-                || (65...90).contains(Int(scalar.value))
-                || (97...122).contains(Int(scalar.value))
-                || (0x00C0...0x024F).contains(Int(scalar.value))
-        }
-    }
-
-    var isEnglishOCRBoundary: Bool {
-        if unicodeScalars.contains(where: { scalar in
+    var containsHanCharacter: Bool {
+        unicodeScalars.contains { scalar in
             (0x3400...0x4DBF).contains(Int(scalar.value))
                 || (0x4E00...0x9FFF).contains(Int(scalar.value))
                 || (0xF900...0xFAFF).contains(Int(scalar.value))
-        }) {
-            return true
         }
-        if unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || CharacterSet.whitespacesAndNewlines.contains($0) }) {
-            return false
-        }
-        return !"'’-‐‑–—.,:;!?/\\%+&()[]{}".contains(self)
+    }
+
+    var hasMeaningfulOCRContent: Bool {
+        containsLatinLetter
+            || containsHanCharacter
+            || unicodeScalars.contains(where: { CharacterSet.decimalDigits.contains($0) })
     }
 }
