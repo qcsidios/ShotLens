@@ -1,5 +1,17 @@
 import Foundation
 
+struct TranslationBatchResult {
+    let translations: [String?]
+
+    var completedCount: Int {
+        translations.compactMap { $0 }.count
+    }
+
+    var isComplete: Bool {
+        completedCount == translations.count
+    }
+}
+
 /// 翻译引擎协议。ShotLens 只保留 OpenAI-compatible API 翻译。
 protocol TranslationProvider {
     /// 引擎名称，用于调试和未来 UI 展示
@@ -12,6 +24,25 @@ protocol TranslationProvider {
     ///   - targetLanguage: 目标语言 BCP-47 代码
     /// - Returns: 译文数组，与 texts 一一对应
     func translate(_ texts: [String], from sourceLanguage: String, to targetLanguage: String) async throws -> [String]
+
+    /// 返回能够可靠映射的逐项译文；单项异常不丢弃同批次的其他成功结果。
+    func translateAvailable(
+        _ texts: [String],
+        from sourceLanguage: String,
+        to targetLanguage: String
+    ) async throws -> TranslationBatchResult
+}
+
+extension TranslationProvider {
+    func translateAvailable(
+        _ texts: [String],
+        from sourceLanguage: String,
+        to targetLanguage: String
+    ) async throws -> TranslationBatchResult {
+        TranslationBatchResult(
+            translations: try await translate(texts, from: sourceLanguage, to: targetLanguage).map(Optional.some)
+        )
+    }
 }
 
 /// 翻译引擎工厂

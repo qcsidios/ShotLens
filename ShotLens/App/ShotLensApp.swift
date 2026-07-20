@@ -456,23 +456,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         ShotLensLogger.log(String(format: "OCR 完成，识别 %d 个文本块，耗时 %.2fs", textBlocks.count, Date().timeIntervalSince(ocrStartedAt)))
-        let layoutStartedAt = Date()
-        let layoutBlocks = TextLayoutOptimizer.merge(textBlocks)
-        guard !layoutBlocks.isEmpty else {
-            ShotLensLogger.log("OCR 文本块均被过滤，未形成可翻译布局块")
-            overlay?.setMessage("未识别到文字")
-            return
+        let orderedBlocks = textBlocks.sorted { lhs, rhs in
+            if abs(lhs.boundingBox.minY - rhs.boundingBox.minY) > 8 {
+                return lhs.boundingBox.minY < rhs.boundingBox.minY
+            }
+            return lhs.boundingBox.minX < rhs.boundingBox.minX
         }
-        ShotLensLogger.log(String(format: "布局完成，合并为 %d 个段落，耗时 %.2fs", layoutBlocks.count, Date().timeIntervalSince(layoutStartedAt)))
-
-        let contentPlan = TranslationContentPlan.make(from: layoutBlocks)
+        let contentPlan = TranslationContentPlan.make(from: orderedBlocks)
         guard !contentPlan.sourceTexts.isEmpty else {
             ShotLensLogger.log("选区内没有需要翻译的英文")
             overlay?.setMessage("未识别到英文")
             return
         }
 
+        configureTranslationRetry(
+            contentPlan,
+            overlay: overlay,
+            settings: settings
+        )
         await translateRecognized(contentPlan, overlay: overlay, settings: settings, pipelineStartedAt: pipelineStartedAt)
+    }
+
+    private func configureTranslationRetry(
+        _ contentPlan: TranslationContentPlan,
+        overlay: OverlayWindow?,
+        settings: TranslationSettings
+    ) {
+        let retry = { [weak self, weak overlay] in
+            guard let self else { return }
+            ShotLensLogger.log("复用 OCR 结果重新翻译")
+            Task {
+                await self.translateRecognized(
+                    contentPlan,
+                    overlay: overlay,
+                    settings: settings,
+                    pipelineStartedAt: Date()
+                )
+            }
+        }
+        overlay?.onRetry = retry
+        overlay?.onRetranslate = retry
     }
 
     private func translateRecognized(
@@ -491,22 +514,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let provider = TranslationProviderFactory.create(with: settings)
         let texts = contentPlan.sourceTexts
         let translationStartedAt = Date()
-        let translatedTexts: [String]
+        let translationResult: TranslationBatchResult
         do {
-            translatedTexts = try await provider.translate(texts, from: sourceLang, to: targetLang)
+            translationResult = try await provider.translateAvailable(
+                texts,
+                from: sourceLang,
+                to: targetLang
+            )
         } catch {
             ShotLensLogger.log("翻译失败", error: error)
             overlay?.setMessage(userFacingTranslationFailureMessage(for: error))
             return
         }
-        guard let translatedBlocks = contentPlan.applying(translatedTexts) else {
+        guard let translatedBlocks = contentPlan.applyingAvailable(translationResult.translations),
+              !translatedBlocks.isEmpty else {
             ShotLensLogger.log("翻译返回数量与待翻译英文片段不一致")
             overlay?.setMessage("翻译失败")
             return
         }
-        ShotLensLogger.log(String(format: "翻译完成，使用 %@，输出 %d 个文本块，耗时 %.2fs", provider.name, translatedTexts.count, Date().timeIntervalSince(translationStartedAt)))
+        ShotLensLogger.log(String(
+            format: "翻译完成，使用 %@，完成 %d/%d 个英文片段，耗时 %.2fs",
+            provider.name,
+            translationResult.completedCount,
+            translationResult.translations.count,
+            Date().timeIntervalSince(translationStartedAt)
+        ))
 
-        overlay?.setTranslatedBlocks(translatedBlocks)
+        overlay?.setTranslatedBlocks(translatedBlocks, isPartial: !translationResult.isComplete)
         ShotLensLogger.log(String(format: "翻译流程总耗时 %.2fs", Date().timeIntervalSince(pipelineStartedAt)))
     }
 

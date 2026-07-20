@@ -17,3 +17,5 @@ swiftc \
   -o "$TEST_BINARY"
 
 "$TEST_BINARY"
+
+rg -n 'request\.timeoutInterval = 5' "$ROOT_DIR/ShotLens/Core/LLMTranslator.swift" >/dev/null

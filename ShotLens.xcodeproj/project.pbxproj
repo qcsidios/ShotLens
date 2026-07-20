@@ -17,7 +17,6 @@
 		AA1000000000000000000002 /* LLMTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000002 /* LLMTranslator.swift */; };
 		AA1000000000000000000004 /* ShotLensLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000004 /* ShotLensLanguage.swift */; };
 		AA1000000000000000000005 /* ShotLensLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000005 /* ShotLensLogger.swift */; };
-		AA1000000000000000000006 /* TextLayoutOptimizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000006 /* TextLayoutOptimizer.swift */; };
 		AA1000000000000000000013 /* TranslationContentPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000013 /* TranslationContentPlanner.swift */; };
 		AA1000000000000000000007 /* TranslationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000007 /* TranslationSettings.swift */; };
 		AA100000000000000000000A /* LLMConnectionChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA200000000000000000000A /* LLMConnectionChecker.swift */; };
@@ -43,7 +42,6 @@
 		AA2000000000000000000002 /* LLMTranslator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMTranslator.swift; sourceTree = "<group>"; };
 		AA2000000000000000000004 /* ShotLensLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotLensLanguage.swift; sourceTree = "<group>"; };
 		AA2000000000000000000005 /* ShotLensLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotLensLogger.swift; sourceTree = "<group>"; };
-		AA2000000000000000000006 /* TextLayoutOptimizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextLayoutOptimizer.swift; sourceTree = "<group>"; };
 		AA2000000000000000000013 /* TranslationContentPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationContentPlanner.swift; sourceTree = "<group>"; };
 		AA2000000000000000000007 /* TranslationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationSettings.swift; sourceTree = "<group>"; };
 		AA200000000000000000000A /* LLMConnectionChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMConnectionChecker.swift; sourceTree = "<group>"; };
@@ -96,7 +94,6 @@
 				AA2000000000000000000002 /* LLMTranslator.swift */,
 				AA2000000000000000000004 /* ShotLensLanguage.swift */,
 				AA2000000000000000000005 /* ShotLensLogger.swift */,
-				AA2000000000000000000006 /* TextLayoutOptimizer.swift */,
 				AA2000000000000000000013 /* TranslationContentPlanner.swift */,
 				AA2000000000000000000007 /* TranslationSettings.swift */,
 				AA200000000000000000000A /* LLMConnectionChecker.swift */,
@@ -219,7 +216,6 @@
 				AA1000000000000000000002 /* LLMTranslator.swift in Sources */,
 				AA1000000000000000000004 /* ShotLensLanguage.swift in Sources */,
 				AA1000000000000000000005 /* ShotLensLogger.swift in Sources */,
-				AA1000000000000000000006 /* TextLayoutOptimizer.swift in Sources */,
 				AA1000000000000000000013 /* TranslationContentPlanner.swift in Sources */,
 				AA1000000000000000000007 /* TranslationSettings.swift in Sources */,
 				AA100000000000000000000A /* LLMConnectionChecker.swift in Sources */,
@@ -372,7 +368,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.2.2;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qingcheng.shotlens.mac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -401,7 +397,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.2.2;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qingcheng.shotlens.mac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

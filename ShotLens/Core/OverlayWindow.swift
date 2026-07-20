@@ -62,6 +62,7 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
     private var isPinned = false
     private var isRetranslating = false
     private var controlPhase: OverlayControlPhase = .processing
+    private var translationStatusMessage = "翻译完成"
 
     func show(
         croppedScreenshot: CGImage,
@@ -129,13 +130,14 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
     }
 
     @MainActor
-    func setTranslatedBlocks(_ blocks: [TranslatedBlock]) {
+    func setTranslatedBlocks(_ blocks: [TranslatedBlock], isPartial: Bool = false) {
         controlPhase = .success
         isRetranslating = false
         isShowingTranslation = true
+        translationStatusMessage = isPartial ? "部分完成" : "翻译完成"
         contentView?.setTranslatedBlocks(blocks)
         contentView?.setDisplayMode(.translation)
-        setToggleStatus(message: "翻译完成")
+        setToggleStatus(message: translationStatusMessage)
     }
 
     @MainActor
@@ -282,7 +284,7 @@ final class OverlayWindow: NSObject, NSWindowDelegate {
         isShowingTranslation.toggle()
         if isShowingTranslation {
             contentView?.setDisplayMode(.translation)
-            setToggleStatus(message: "翻译完成")
+            setToggleStatus(message: translationStatusMessage)
         } else {
             contentView?.setDisplayMode(.original)
             setToggleStatus(message: "显示原文")
@@ -924,6 +926,8 @@ final class OverlayContentView: NSView {
                     displayBounds: bounds
                 )
                 NSImage(cgImage: restored, size: restoredDisplayRect.size).draw(in: restoredDisplayRect)
+            } else {
+                drawFallbackBackground(in: rect, forPixelRect: block.original.boundingBox)
             }
             let backgroundColor = sampledBackgroundColor(forPixelRect: block.original.boundingBox)
 
@@ -945,6 +949,11 @@ final class OverlayContentView: NSView {
     private func sampledBackgroundColor(forPixelRect pixelRect: CGRect) -> NSColor {
         guard let screenshot else { return .windowBackgroundColor }
         return screenshot.averageColor(in: pixelRect) ?? .windowBackgroundColor
+    }
+
+    private func drawFallbackBackground(in displayRect: CGRect, forPixelRect pixelRect: CGRect) {
+        sampledBackgroundColor(forPixelRect: pixelRect).setFill()
+        NSBezierPath(rect: displayRect).fill()
     }
 
     private func resolvedTextColor(

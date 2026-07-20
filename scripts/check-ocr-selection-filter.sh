@@ -22,3 +22,7 @@ swiftc \
   -o "$TEST_BINARY"
 
 "$TEST_BINARY" "$OCR_HELPER"
+
+rg -n 'let enhancedBlocks = try recognizeEnglishBlocks' "$ROOT_DIR/ShotLens/Tools/ShotLensOCR.swift" >/dev/null
+rg -n 'return try recognizeEnglishBlocks\(in: image, sourceImage: image\)' "$ROOT_DIR/ShotLens/Tools/ShotLensOCR.swift" >/dev/null
+rg -n 'request\.usesLanguageCorrection = true' "$ROOT_DIR/ShotLens/Tools/ShotLensOCR.swift" >/dev/null

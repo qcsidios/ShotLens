@@ -109,6 +109,8 @@ fi
 rg -n 'InProcessSelectionOverlay' "$SHOTLENS_APP" "$SELECTION_OVERLAY" >/dev/null
 rg -n 'OverlayGeometry\.displayRect' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'OverlayTextBackgroundRestorer\.restoredPatch' "$OVERLAY_WINDOW" >/dev/null
+rg -n 'drawFallbackBackground' "$OVERLAY_WINDOW" >/dev/null
+rg -n -U '} else \{\n\s+drawFallbackBackground' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'sampledBackgroundColor' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'resolvedTextColor' "$OVERLAY_WINDOW" >/dev/null
 rg -n 'var best = minimumSize' "$OVERLAY_WINDOW" >/dev/null

@@ -42,6 +42,13 @@ struct TranslationEndpointSmoke {
         try await assertTranslates(
             endpoint: "https://shotlens-test.local/v1",
             expectedPath: "/v1/chat/completions",
+            assistantContent: #"{"target_language":"zh-Hans","texts":["独立分析人工智能技术；」「了解人工智能领域的现状。"],"source_language":"en"}"#,
+            input: ["Independent analysis of AI technology", "Understand the state of the AI field"],
+            expected: ["独立分析人工智能技术；", "了解人工智能领域的现状。"]
+        )
+        try await assertTranslates(
+            endpoint: "https://shotlens-test.local/v1",
+            expectedPath: "/v1/chat/completions",
             assistantContent: #"{"0":"你好","1":"世界"}"#
         )
         try await assertTranslates(
@@ -82,6 +89,8 @@ struct TranslationEndpointSmoke {
         try await assertTypicalLargeSelectionStaysSingleRequest()
         try await assertIndexedJSONStringsAreAlignedWithoutRepair()
         try await assertMissingIndexedItemFailsWithoutSecondRequest()
+        try await assertPartialIndexedObjectKeepsAvailableItems()
+        try await assertSingleMiddleIndexedObjectKeepsItsPosition()
         try await assertProductIdentifierMayRemainUntranslated()
         try await assertPunctuatedIndexedJSONStaysSingleRequest()
         try await assertUntranslatedSentenceFailsWithoutSecondRequest()
@@ -487,9 +496,9 @@ struct TranslationEndpointSmoke {
             model: "test-model"
         ))
 
-        let result = try await translator.translate(["Pricing"], from: "en", to: "zh-Hans")
-        guard result == ["价格"] else {
-            throw TestFailure("Expected unchanged common UI word to use local fallback, got \(result)")
+        let result = try await translator.translate(["Pricing", "Updated"], from: "en", to: "zh-Hans")
+        guard result == ["价格", "已更新"] else {
+            throw TestFailure("Expected common UI words to use local fallbacks, got \(result)")
         }
         guard MockOpenAIProtocol.requestBodies.isEmpty else {
             throw TestFailure("Expected deterministic UI translation to skip the network")
@@ -601,8 +610,11 @@ struct TranslationEndpointSmoke {
         let body = MockOpenAIProtocol.requestBodies.first ?? ""
         guard body.contains("Use all items as context"),
               body.contains("CRM"),
-              body.contains("Customer relationship management platform") else {
-            throw TestFailure("Expected one contextual translation request containing the abbreviation and nearby text")
+              body.contains("Customer relationship management platform"),
+              body.contains(#"\"items\""#),
+              body.contains(#"\"0\":\"CRM\""#),
+              !body.contains(#"\"texts\""#) else {
+            throw TestFailure("Expected one contextual numeric-id request containing the abbreviation and nearby text")
         }
     }
 
@@ -692,6 +704,57 @@ struct TranslationEndpointSmoke {
             guard MockOpenAIProtocol.requestBodies.count == 1 else {
                 throw TestFailure("Incomplete indexed output must not trigger a second request")
             }
+        }
+    }
+
+    private static func assertPartialIndexedObjectKeepsAvailableItems() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = #"{"0":"版本更新","2":"功能说明"}"#
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+
+        let result = try await translator.translateAvailable(
+            ["Release update", "Page title", "Feature description"],
+            from: "en",
+            to: "zh-Hans"
+        )
+        guard result.translations[0] == "版本更新",
+              result.translations[1] == nil,
+              result.translations[2] == "功能说明",
+              result.completedCount == 2,
+              !result.isComplete else {
+            throw TestFailure("Expected valid indexed items to survive a partial response: \(result.translations)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 1 else {
+            throw TestFailure("Partial response must not trigger another network request")
+        }
+    }
+
+    private static func assertSingleMiddleIndexedObjectKeepsItsPosition() async throws {
+        MockOpenAIProtocol.reset()
+        MockOpenAIProtocol.assistantContent = #"{"1":"页面标题"}"#
+        let translator = LLMTranslator(settings: TranslationSettings(
+            apiEndpoint: "https://shotlens-test.local/v1",
+            apiKey: "test-key",
+            model: "test-model"
+        ))
+
+        let result = try await translator.translateAvailable(
+            ["Release update", "Page title", "Feature description"],
+            from: "en",
+            to: "zh-Hans"
+        )
+        guard result.translations[0] == nil,
+              result.translations[1] == "页面标题",
+              result.translations[2] == nil,
+              result.completedCount == 1 else {
+            throw TestFailure("Expected the zero-based middle item to keep its position: \(result.translations)")
+        }
+        guard MockOpenAIProtocol.requestBodies.count == 1 else {
+            throw TestFailure("A single valid partial item must not trigger another request")
         }
     }
 

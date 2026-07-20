@@ -33,9 +33,19 @@ struct ShotLensOCR {
             throw OCRToolError.unreadableImage
         }
 
+        if let enhanced = enhancedRecognitionImage(from: image) {
+            let enhancedBlocks = try recognizeEnglishBlocks(in: enhanced, sourceImage: image)
+            if !enhancedBlocks.isEmpty {
+                return enhancedBlocks
+            }
+        }
+        return try recognizeEnglishBlocks(in: image, sourceImage: image)
+    }
+
+    private static func recognizeEnglishBlocks(in recognitionImage: CGImage, sourceImage: CGImage) throws -> [OCRBlockDTO] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = false
+        request.usesLanguageCorrection = true
         request.automaticallyDetectsLanguage = false
         request.minimumTextHeight = 0.004
         request.recognitionLanguages = ["en-US"]
@@ -55,10 +65,10 @@ struct ShotLensOCR {
             "Copy",
             "Save",
             "Download",
-            "Upload"
+            "Upload",
+            "Updated"
         ]
 
-        let recognitionImage = enhancedRecognitionImage(from: image) ?? image
         let handler = VNImageRequestHandler(cgImage: recognitionImage, options: [:])
         try handler.perform([request])
 
@@ -66,13 +76,13 @@ struct ShotLensOCR {
             return []
         }
 
-        let imageSize = CGSize(width: image.width, height: image.height)
+        let imageSize = CGSize(width: sourceImage.width, height: sourceImage.height)
         return observations.flatMap { observation -> [OCRBlockDTO] in
             guard let candidate = bestCandidate(from: observation) else { return [] }
             return englishBlocks(
                 from: candidate,
                 observation: observation,
-                image: image,
+                image: sourceImage,
                 imageSize: imageSize
             )
         }

@@ -7,6 +7,7 @@ struct TranslationContentPlannerSmoke {
         try assertChineseOnlyIsExcluded()
         try assertMixedTextIsSplitAndReembedded()
         try assertEnglishOnlyStaysSingleItem()
+        try assertPartialTranslationsKeepIndependentBlocks()
         print("Translation content planner smoke test passed.")
     }
 
@@ -34,6 +35,18 @@ struct TranslationContentPlannerSmoke {
         guard plan.sourceTexts == ["Open settings"],
               plan.applying(["打开设置"])?.map(\.translatedText) == ["  打开设置  "] else {
             throw TestFailure("English-only block should preserve surrounding whitespace")
+        }
+    }
+
+    private static func assertPartialTranslationsKeepIndependentBlocks() throws {
+        let plan = TranslationContentPlan.make(from: [
+            block("Release update"),
+            block("Page title"),
+            block("Feature description")
+        ])
+        let translated = plan.applyingAvailable(["版本更新", nil, "功能说明"])
+        guard translated?.map(\.translatedText) == ["版本更新", "功能说明"] else {
+            throw TestFailure("Unavailable items must not discard independent successful blocks")
         }
     }
 

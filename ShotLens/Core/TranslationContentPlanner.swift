@@ -34,18 +34,24 @@ struct TranslationContentPlan {
     }
 
     func applying(_ translations: [String]) -> [TranslatedBlock]? {
+        applyingAvailable(translations.map(Optional.some))
+    }
+
+    func applyingAvailable(_ translations: [String?]) -> [TranslatedBlock]? {
         guard translations.count == sourceTexts.count else { return nil }
 
-        return blockPlans.map { plan in
-            let text = plan.parts.map { part in
+        return blockPlans.compactMap { plan in
+            var values: [String] = []
+            for part in plan.parts {
                 switch part {
                 case .preserved(let value):
-                    return value
+                    values.append(value)
                 case .translated(let index):
-                    return translations[index]
+                    guard let translation = translations[index] else { return nil }
+                    values.append(translation)
                 }
-            }.joined()
-            return TranslatedBlock(original: plan.original, translatedText: text)
+            }
+            return TranslatedBlock(original: plan.original, translatedText: values.joined())
         }
     }
 
